@@ -89,4 +89,48 @@ interface HistoryDao {
 
     @Query("SELECT * FROM message WHERE conversationId = :conversationId ORDER BY postedAt DESC, id DESC LIMIT 1")
     fun lastMessage(conversationId: Long): MessageEntity?
+
+    @Query("SELECT * FROM conversation WHERE id = :id")
+    fun conversationById(id: Long): ConversationEntity?
+
+    // --- Search and bulk operations (T8) ---
+
+    /** Full-text search; [match] is an FTS4 MATCH expression built by the Ingestor. */
+    @Query(
+        "SELECT m.* FROM message m " +
+            "JOIN message_fts ON m.id = message_fts.rowid " +
+            "JOIN conversation c ON c.id = m.conversationId " +
+            "WHERE message_fts MATCH :match " +
+            "AND (:deletedOnly = 0 OR m.deleted = 1) " +
+            "AND (:anyPackage = 1 OR c.packageName IN (:packages)) " +
+            "ORDER BY m.postedAt DESC, m.id DESC LIMIT :limit",
+    )
+    fun search(match: String, deletedOnly: Boolean, anyPackage: Boolean, packages: Collection<String>, limit: Int): List<MessageEntity>
+
+    @Query(
+        "SELECT m.* FROM message m JOIN conversation c ON c.id = m.conversationId " +
+            "WHERE m.deleted = 1 AND (:anyPackage = 1 OR c.packageName IN (:packages)) " +
+            "ORDER BY m.postedAt DESC, m.id DESC LIMIT :limit",
+    )
+    fun deletedMessages(anyPackage: Boolean, packages: Collection<String>, limit: Int): List<MessageEntity>
+
+    @Query("UPDATE message SET read = :read WHERE id IN (:ids)")
+    fun setRead(ids: Collection<Long>, read: Boolean)
+
+    @Query("UPDATE message SET pinned = :pinned WHERE id IN (:ids)")
+    fun setPinned(ids: Collection<Long>, pinned: Boolean)
+
+    @Query("DELETE FROM message WHERE id IN (:ids)")
+    fun deleteMessages(ids: Collection<Long>): Int
+
+    @Query("SELECT DISTINCT conversationId FROM message WHERE id IN (:ids)")
+    fun conversationIdsOf(ids: Collection<Long>): List<Long>
+
+    /** Recomputes the unread counter from the messages that are still unread. */
+    @Query(
+        "UPDATE conversation SET unreadCount = " +
+            "(SELECT COUNT(*) FROM message WHERE conversationId = conversation.id AND read = 0) " +
+            "WHERE id IN (:conversationIds)",
+    )
+    fun recountUnread(conversationIds: Collection<Long>)
 }

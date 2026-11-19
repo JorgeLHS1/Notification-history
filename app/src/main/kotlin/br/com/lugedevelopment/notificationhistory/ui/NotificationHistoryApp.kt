@@ -49,6 +49,9 @@ fun NotificationHistoryApp(ingestor: Ingestor) {
     var conversationId by rememberSaveable { mutableStateOf<Long?>(null) }
     var conversationTitle by rememberSaveable { mutableStateOf("") }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    // Set when a conversation is opened from a search result.
+    var focusMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var highlightQuery by rememberSaveable { mutableStateOf("") }
 
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
         val openId = conversationId
@@ -60,13 +63,27 @@ fun NotificationHistoryApp(ingestor: Ingestor) {
                 SettingsScreen(vm, onToggleCapture = vm::onCaptureToggled, onBack = { showSettings = false })
             }
             openId != null -> {
-                BackHandler { conversationId = null }
+                BackHandler {
+                    conversationId = null
+                    focusMessageId = null
+                    highlightQuery = ""
+                }
                 val vm: ConversationViewModel = viewModel(
                     key = "conversation-$openId",
                     factory = UiViewModelFactory(ingestor, retention, openId),
                 )
                 PollWhileVisible { vm.load() }
-                ConversationScreen(vm, conversationTitle, onBack = { conversationId = null })
+                ConversationScreen(
+                    vm,
+                    conversationTitle,
+                    onBack = {
+                        conversationId = null
+                        focusMessageId = null
+                        highlightQuery = ""
+                    },
+                    focusMessageId = focusMessageId,
+                    query = highlightQuery,
+                )
             }
             else -> {
                 val vm: HomeViewModel = viewModel(factory = UiViewModelFactory(ingestor, retention))
@@ -78,6 +95,12 @@ fun NotificationHistoryApp(ingestor: Ingestor) {
                         conversationId = id
                     },
                     onOpenSettings = { showSettings = true },
+                    onOpenMessage = { id, title, messageId, query ->
+                        conversationTitle = title
+                        focusMessageId = messageId
+                        highlightQuery = query
+                        conversationId = id
+                    },
                 )
             }
         }
