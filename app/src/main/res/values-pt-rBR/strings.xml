@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Histórico de Notificações</string>
+    <string name="home_title">Histórico de Notificações</string>
+    <string name="home_empty">Nenhuma notificação capturada ainda.</string>
+</resources>
