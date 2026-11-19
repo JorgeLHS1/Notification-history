@@ -58,6 +58,8 @@ data class MessageEntity(
     val deleted: Boolean = false,
     val read: Boolean = false,
     val pinned: Boolean = false,
+    /** When the sender deleted it (placeholder seen); null while not deleted. */
+    val deletedAt: Long? = null,
     /** Snapshot extras serialized as "key=value" lines; attachments come later. */
     val metadata: String? = null,
 )

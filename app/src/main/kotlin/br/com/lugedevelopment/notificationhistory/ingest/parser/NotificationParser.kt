@@ -21,8 +21,19 @@ fun interface NotificationParser {
 /** Parsers keyed by package name, with a generic fallback for every other app. */
 class ParserRegistry(
     private val fallback: NotificationParser = GenericParser(),
-    parsers: Map<String, NotificationParser> = emptyMap(),
+    parsers: Map<String, NotificationParser> = defaultParsers(),
 ) {
+    companion object {
+        /** Built-in per-app parsers. */
+        fun defaultParsers(): Map<String, NotificationParser> {
+            val whatsApp = WhatsAppParser()
+            return mapOf(
+                WhatsAppParser.PACKAGE to whatsApp,
+                WhatsAppParser.PACKAGE_BUSINESS to whatsApp,
+            )
+        }
+    }
+
     private val byPackage = parsers.toMutableMap()
 
     fun register(packageName: String, parser: NotificationParser) {

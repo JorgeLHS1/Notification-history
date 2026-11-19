@@ -1,4 +1,4 @@
-﻿package br.com.lugedevelopment.notificationhistory
+package br.com.lugedevelopment.notificationhistory
 
 import android.os.Bundle
 import androidx.activity.compose.setContent

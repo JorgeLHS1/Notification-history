@@ -1,8 +1,9 @@
-﻿package br.com.lugedevelopment.notificationhistory
+package br.com.lugedevelopment.notificationhistory
 
 import android.app.Application
 import br.com.lugedevelopment.notificationhistory.security.EncryptedDatabase
 import br.com.lugedevelopment.notificationhistory.ingest.Ingestor
+import br.com.lugedevelopment.notificationhistory.retention.RetentionWorker
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -18,4 +19,12 @@ class NotificationHistoryApp : Application() {
 
     /** Single background thread: serialises writes in arrival order. */
     val ioExecutor: ExecutorService by lazy { Executors.newSingleThreadExecutor() }
+
+    override fun onCreate() {
+        super.onCreate()
+        // Scheduling must never crash app startup (also WorkManager may be uninitialised under Robolectric).
+        runCatching { RetentionWorker.schedule(this) }
+            .onFailure { android.util.Log.w("NotificationHistoryApp", "retention schedule failed", it) }
+    }
 }
+
