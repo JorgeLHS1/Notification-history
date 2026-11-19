@@ -133,4 +133,23 @@ interface HistoryDao {
             "WHERE id IN (:conversationIds)",
     )
     fun recountUnread(conversationIds: Collection<Long>)
+
+    // --- Backup and media (T10) ---
+
+    @Query("SELECT * FROM message ORDER BY postedAt, id")
+    fun allMessages(): List<MessageEntity>
+
+    @Query("SELECT * FROM attachment ORDER BY id")
+    fun allAttachments(): List<AttachmentEntity>
+
+    /** Messages announcing a picture that have no recovered media file yet. */
+    @Query(
+        "SELECT * FROM message WHERE postedAt >= :since " +
+            "AND id IN (SELECT messageId FROM attachment WHERE type = 'IMAGE') " +
+            "AND id NOT IN (SELECT messageId FROM attachment WHERE type = 'MEDIA_FILE') ORDER BY postedAt",
+    )
+    fun messagesAwaitingMedia(since: Long): List<MessageEntity>
+
+    @Query("SELECT value FROM attachment WHERE type = 'MEDIA_FILE'")
+    fun mediaFileValues(): List<String>
 }

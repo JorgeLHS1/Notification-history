@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_backup">Backup</string>
+    <string name="backup_note">Exporte o histórico para um arquivo ZIP em uma pasta de sua escolha, ou importe um de volta. A importação mescla sem duplicar mensagens. O arquivo não é criptografado: guarde-o em local seguro.</string>
+    <string name="backup_export">Exportar</string>
+    <string name="backup_import">Importar</string>
+    <string name="backup_working">Processando…</string>
+    <string name="backup_export_done">Backup exportado.</string>
+    <string name="backup_import_done">Importação concluída: %1$d mensagens novas, %2$d já existentes.</string>
+    <string name="backup_invalid">Este arquivo não é um backup deste app ou é de uma versão mais nova.</string>
+    <string name="backup_failed">A operação falhou. Verifique o arquivo e tente de novo.</string>
+    <string name="settings_media">Mídia recebida</string>
+    <string name="media_explanation">As notificações trazem só uma prévia das fotos. Para guardar os arquivos, escolha a pasta onde o mensageiro salva a mídia recebida (por exemplo, uma pasta de mídia do WhatsApp em Android/media, ou uma pasta para onde você exporta a mídia). O app copia os arquivos cujo horário corresponde a uma mensagem com foto. O Android pode bloquear algumas pastas de apps no seletor; nesse caso, salve a mídia em uma pasta acessível e escolha essa.</string>
+    <string name="media_no_folder">Nenhuma pasta escolhida.</string>
+    <string name="media_folder_set">Pasta escolhida. Arquivos novos correspondentes são copiados ao verificar.</string>
+    <string name="media_pick_folder">Escolher pasta</string>
+    <string name="media_scan">Verificar agora</string>
+    <string name="media_scan_done">%1$d arquivos verificados, %2$d copiados.</string>
+</resources>

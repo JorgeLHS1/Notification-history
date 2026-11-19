@@ -598,6 +598,8 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
+            item { SectionTitle(stringResource(R.string.settings_backup)) }
+            item { BackupMediaSection() }
             item { SectionTitle(stringResource(R.string.settings_capture)) }
             if (state.apps.isEmpty()) {
                 item {

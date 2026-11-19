@@ -5,7 +5,20 @@ import br.com.lugedevelopment.notificationhistory.data.AttachmentEntity
 import br.com.lugedevelopment.notificationhistory.data.ConversationEntity
 import br.com.lugedevelopment.notificationhistory.data.HistoryDatabase
 import br.com.lugedevelopment.notificationhistory.data.MessageEntity
+import br.com.lugedevelopment.notificationhistory.backup.BackupConversation
+import br.com.lugedevelopment.notificationhistory.backup.BackupData
+import br.com.lugedevelopment.notificationhistory.backup.BackupMessage
+import br.com.lugedevelopment.notificationhistory.backup.HistoryBackup
+import br.com.lugedevelopment.notificationhistory.backup.ImportResult
+import br.com.lugedevelopment.notificationhistory.data.AttachmentType
 import br.com.lugedevelopment.notificationhistory.ingest.parser.ParserRegistry
+import br.com.lugedevelopment.notificationhistory.media.MediaCandidate
+import br.com.lugedevelopment.notificationhistory.media.MediaFile
+import br.com.lugedevelopment.notificationhistory.media.MediaMatcher
+import br.com.lugedevelopment.notificationhistory.media.MediaRecoveryResult
+import br.com.lugedevelopment.notificationhistory.media.MediaSource
+import java.io.InputStream
+import java.io.OutputStream
 
 /** Result of ingesting one snapshot. */
 sealed interface IngestResult {
@@ -188,6 +201,91 @@ class Ingestor(
             for (chunk in touched.chunked(BULK_CHUNK)) dao.recountUnread(chunk)
             dao.deleteEmptyConversations()
         }
+    }
+
+    // --- Backup export/import (T10) ---------------------------------------------------
+
+    /** Writes the whole history (apps, conversations, messages, attachments) as a versioned JSON in a ZIP. */
+    fun exportBackup(out: OutputStream, now: Long = System.currentTimeMillis()) {
+        val data = database.runInTransaction<BackupData> {
+            val byConversation = dao.allMessages().groupBy { it.conversationId }
+            val attachments = dao.allAttachments().groupBy { it.messageId }
+            BackupData(
+                apps = dao.apps(),
+                conversations = dao.conversations().map { c ->
+                    BackupConversation(c, byConversation[c.id].orEmpty().map { BackupMessage(it, attachments[it.id].orEmpty()) })
+                },
+            )
+        }
+        HistoryBackup.write(data, out, now)
+    }
+
+    /**
+     * Merges a backup into the current history without duplicating anything: apps are kept
+     * as they are if already known, conversations are matched by (package, key) and messages
+     * by the ingest dedup rule. Flags (deleted, pinned, read) of new messages are restored.
+     * Throws InvalidBackupException for unknown files; nothing is written in that case.
+     */
+    fun importBackup(input: InputStream): ImportResult {
+        val data = HistoryBackup.read(input)
+        return database.runInTransaction<ImportResult> {
+            data.apps.forEach { dao.insertApp(it) }
+            var newConversations = 0
+            var newMessages = 0
+            var duplicates = 0
+            val touched = HashSet<Long>()
+            for (bc in data.conversations) {
+                val c = bc.conversation
+                if (dao.app(c.packageName) == null) dao.insertApp(AppEntity(c.packageName, c.packageName))
+                var conversation = dao.conversation(c.packageName, c.conversationKey)
+                    ?: c.copy(id = 0, unreadCount = 0).let { newConversations++; it.copy(id = dao.insertConversation(it)) }
+                for (bm in bc.messages) {
+                    val m = bm.message
+                    if (dao.countDuplicates(conversation.id, m.sender, m.text, m.postedAt, m.notificationKey) > 0) {
+                        duplicates++
+                        continue
+                    }
+                    val id = dao.insertMessage(m.copy(id = 0, conversationId = conversation.id))
+                    if (bm.attachments.isNotEmpty()) dao.insertAttachments(bm.attachments.map { it.copy(id = 0, messageId = id) })
+                    newMessages++
+                }
+                if (c.lastActivityAt > conversation.lastActivityAt) {
+                    conversation = conversation.copy(lastActivityAt = c.lastActivityAt)
+                    dao.updateConversation(conversation)
+                }
+                touched += conversation.id
+            }
+            for (chunk in touched.chunked(BULK_CHUNK)) dao.recountUnread(chunk)
+            ImportResult(newConversations, newMessages, duplicates)
+        }
+    }
+
+    // --- Media recovery (T10) ------------------------------------------------------------
+
+    /**
+     * Copies media from [source] into app-private storage for messages that announced a
+     * picture (IMAGE attachment) and have no MEDIA_FILE yet, matching by timestamp
+     * ([MediaMatcher]). [save] performs the copy and returns the stored path (null = failed).
+     */
+    fun recoverMedia(
+        source: MediaSource,
+        save: (messageId: Long, file: MediaFile) -> String?,
+        since: Long = 0,
+        windowMs: Long = MediaMatcher.DEFAULT_WINDOW_MS,
+    ): MediaRecoveryResult {
+        val files = source.list()
+        val candidates = dao.messagesAwaitingMedia(since).map { MediaCandidate(it.id, it.postedAt) }
+        // A file already copied for another message is not offered again.
+        val copiedValues = dao.mediaFileValues()
+        val fresh = files.filter { f -> copiedValues.none { it.endsWith("_" + MediaMatcher.safeName(f.name)) } }
+        val matches = MediaMatcher.match(candidates, fresh, windowMs)
+        var copied = 0
+        for ((messageId, file) in matches) {
+            val path = save(messageId, file) ?: continue
+            dao.insertAttachments(listOf(AttachmentEntity(messageId = messageId, type = AttachmentType.MEDIA_FILE, value = path)))
+            copied++
+        }
+        return MediaRecoveryResult(files.size, matches.size, copied)
     }
 
     // --- App filter -------------------------------------------------------------------
