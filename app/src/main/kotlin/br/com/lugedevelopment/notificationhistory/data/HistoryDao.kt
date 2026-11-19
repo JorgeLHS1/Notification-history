@@ -73,6 +73,15 @@ interface HistoryDao {
     fun deleteEmptyConversations(): Int
 
     @Insert
+    fun insertAttachments(attachments: List<AttachmentEntity>)
+
+    @Query("SELECT * FROM attachment WHERE messageId = :messageId ORDER BY id")
+    fun attachments(messageId: Long): List<AttachmentEntity>
+
+    @Query("SELECT * FROM attachment WHERE messageId IN (:messageIds) ORDER BY id")
+    fun attachmentsOf(messageIds: Collection<Long>): List<AttachmentEntity>
+
+    @Insert
     fun insertMessage(message: MessageEntity): Long
 
     @Query("SELECT * FROM message WHERE conversationId = :conversationId ORDER BY postedAt, id")

@@ -64,6 +64,29 @@ data class MessageEntity(
     val metadata: String? = null,
 )
 
+enum class AttachmentType { LINK, IMAGE, LARGE_ICON, ACTION }
+
+/** Metadata tied to a message: link URL, image/large-icon reference, or action label. */
+@Entity(
+    tableName = "attachment",
+    indices = [Index("messageId")],
+    foreignKeys = [
+        ForeignKey(
+            entity = MessageEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["messageId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class AttachmentEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val messageId: Long,
+    val type: AttachmentType,
+    /** URL (LINK), image reference (IMAGE, LARGE_ICON) or button label (ACTION). */
+    val value: String,
+)
+
 /** Full-text index over messages, kept in sync by Room (external content). */
 @Fts4(contentEntity = MessageEntity::class)
 @Entity(tableName = "message_fts")

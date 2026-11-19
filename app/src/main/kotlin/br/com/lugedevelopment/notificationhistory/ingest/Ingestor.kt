@@ -1,6 +1,7 @@
 package br.com.lugedevelopment.notificationhistory.ingest
 
 import br.com.lugedevelopment.notificationhistory.data.AppEntity
+import br.com.lugedevelopment.notificationhistory.data.AttachmentEntity
 import br.com.lugedevelopment.notificationhistory.data.ConversationEntity
 import br.com.lugedevelopment.notificationhistory.data.HistoryDatabase
 import br.com.lugedevelopment.notificationhistory.data.MessageEntity
@@ -47,6 +48,7 @@ class Ingestor(
         var stored = 0
         var duplicates = 0
         var markedDeleted = 0
+        var lastStoredId: Long? = null
         for (message in parsed) {
             var conversation = dao.conversation(snapshot.packageName, message.conversationKey)
                 ?: ConversationEntity(
@@ -77,7 +79,7 @@ class Ingestor(
                 duplicates++
                 continue
             }
-            dao.insertMessage(
+            val messageId = dao.insertMessage(
                 MessageEntity(
                     conversationId = conversation.id,
                     sender = message.sender,
@@ -87,6 +89,9 @@ class Ingestor(
                     metadata = metadata,
                 ),
             )
+            val links = AttachmentBuilder.links(message.text)
+            if (links.isNotEmpty()) dao.insertAttachments(links.map { it.copy(messageId = messageId) })
+            lastStoredId = messageId
             conversation = conversation.copy(
                 title = message.conversationTitle,
                 isGroup = conversation.isGroup || message.isGroup,
@@ -95,6 +100,11 @@ class Ingestor(
             )
             dao.updateConversation(conversation)
             stored++
+        }
+        // Image/large-icon/action metadata belongs to the notification: attach it to the newest new message.
+        lastStoredId?.let { id ->
+            val extra = AttachmentBuilder.fromExtras(snapshot.extras)
+            if (extra.isNotEmpty()) dao.insertAttachments(extra.map { it.copy(messageId = id) })
         }
         IngestResult.Stored(stored, duplicates, markedDeleted)
     }
@@ -128,6 +138,13 @@ class Ingestor(
     }
 
     // --- Query surface ----------------------------------------------------------------
+
+    /** Attachments (links, images, actions) of one message, in insertion order. */
+    fun attachments(messageId: Long): List<AttachmentEntity> = dao.attachments(messageId)
+
+    /** Attachments of many messages grouped by message id (empty ids give an empty map). */
+    fun attachments(messageIds: Collection<Long>): Map<Long, List<AttachmentEntity>> =
+        if (messageIds.isEmpty()) emptyMap() else dao.attachmentsOf(messageIds).groupBy { it.messageId }
 
     /** Conversations, most recent first. [packages] null or empty means all apps. */
     fun conversations(packages: Set<String>? = null): List<ConversationSummary> {

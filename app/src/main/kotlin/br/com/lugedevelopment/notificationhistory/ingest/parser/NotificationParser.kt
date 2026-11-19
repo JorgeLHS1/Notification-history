@@ -27,9 +27,14 @@ class ParserRegistry(
         /** Built-in per-app parsers. */
         fun defaultParsers(): Map<String, NotificationParser> {
             val whatsApp = WhatsAppParser()
+            val telegram = TelegramParser()
             return mapOf(
                 WhatsAppParser.PACKAGE to whatsApp,
                 WhatsAppParser.PACKAGE_BUSINESS to whatsApp,
+                TelegramParser.PACKAGE to telegram,
+                TelegramParser.PACKAGE_WEB to telegram,
+                InstagramParser.PACKAGE to InstagramParser(),
+                MessengerParser.PACKAGE to MessengerParser(),
             )
         }
     }
