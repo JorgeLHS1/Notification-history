@@ -48,6 +48,30 @@ interface HistoryDao {
         notificationKey: String,
     ): Int
 
+    /** Original message a "deleted" placeholder replaces: same sender, same timestamp preferred, else same notification. */
+    @Query(
+        "SELECT * FROM message WHERE conversationId = :conversationId AND deleted = 0 " +
+            "AND ((sender IS NULL AND :sender IS NULL) OR sender = :sender) " +
+            "AND (postedAt = :postedAt OR notificationKey = :notificationKey) " +
+            "ORDER BY (postedAt = :postedAt) DESC, postedAt DESC, id DESC LIMIT 1",
+    )
+    fun deletionCandidate(conversationId: Long, sender: String?, postedAt: Long, notificationKey: String): MessageEntity?
+
+    @Query("UPDATE message SET deleted = 1, deletedAt = :at WHERE id = :id")
+    fun markDeleted(id: Long, at: Long)
+
+    @Query("UPDATE message SET pinned = :pinned WHERE id = :id")
+    fun setPinned(id: Long, pinned: Boolean)
+
+    @Query("DELETE FROM message WHERE pinned = 0 AND deleted = 0 AND postedAt < :cutoff")
+    fun deleteExpiredMessages(cutoff: Long): Int
+
+    @Query("DELETE FROM message WHERE pinned = 0 AND deleted = 1 AND COALESCE(deletedAt, postedAt) < :cutoff")
+    fun deleteExpiredDeletedMessages(cutoff: Long): Int
+
+    @Query("DELETE FROM conversation WHERE id NOT IN (SELECT DISTINCT conversationId FROM message)")
+    fun deleteEmptyConversations(): Int
+
     @Insert
     fun insertMessage(message: MessageEntity): Long
 
