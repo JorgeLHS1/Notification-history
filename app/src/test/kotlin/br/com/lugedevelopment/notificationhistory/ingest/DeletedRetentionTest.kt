@@ -130,7 +130,8 @@ class DeletedRetentionTest {
         val result = ingestor.ingest(direct(listOf(SnapshotMessage(null, "This message was deleted", 1_000))))
 
         assertEquals(IngestResult.Stored(0, 0, 0), result)
-        assertTrue(onlyConversationMessages().isEmpty())
+        // Nothing to mark: no empty conversation is left behind either.
+        assertTrue(ingestor.conversations().isEmpty())
     }
 
     @Test

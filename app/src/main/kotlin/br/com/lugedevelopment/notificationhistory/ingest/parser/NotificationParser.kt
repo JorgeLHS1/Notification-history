@@ -11,6 +11,12 @@ data class ParsedMessage(
     val sender: String?,
     val text: String,
     val postedAt: Long,
+    /**
+     * True when [postedAt] is the message's own timestamp (MessagingStyle entry): dedup then
+     * relies on it alone, since chat apps reuse one notification key per conversation.
+     * False when it is the snapshot post time (plain posts): dedup also falls back to the key.
+     */
+    val hasOwnTimestamp: Boolean = false,
 )
 
 /** Per-app strategy that turns a snapshot into zero or more messages. */

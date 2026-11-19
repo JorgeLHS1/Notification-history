@@ -34,6 +34,7 @@
 - `DatabaseKeyStore.loadOrCreate()`: se o arquivo existe, `unwrap`; senão gera, `wrap` e grava.
 - `KeystoreKeyWrapper`: saída `iv(12) || ciphertext+tag`; chave criada sob demanda com o alias `notification_history_db_wrap_key`.
 - `SecureGate` observa o ciclo de vida: `ON_STOP` → `SessionLock.onBackgrounded()`; `ON_START` → `onForegrounded()` e, se bloqueado, abre o `BiometricPrompt`.
+- O `SessionLock` é do processo (`NotificationHistoryApp.sessionLock`, passado por `MainActivity`), não um `remember`: rotação não pede autenticação de novo (revisado na v0.4.0, ver [correções da revisão](2026-11-review-fixes.md)).
 
 ## 4. Guia para Futuros Agentes
 - **Obter o banco**: `EncryptedDatabase.build(applicationContext)` uma única vez (ex.: em `Application`) e compartilhar com Ingestor/UI. Testes: `HistoryDatabase.inMemory(ctx)` (sem criptografia).

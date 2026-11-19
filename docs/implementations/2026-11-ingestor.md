@@ -25,7 +25,7 @@ O módulo Ingestor: recebe `NotificationSnapshot` (sem dependência do Android),
 - **API bloqueante (não `suspend`)**: o listener chama em thread de background; testes ficam simples sem `kotlinx-coroutines-test`. UI futura pode envolver em `withContext(Dispatchers.IO)` ou adicionar consultas `Flow` no DAO.
 - **Sem DI**: `Ingestor(database, parsers = ParserRegistry())`.
 - **Chave de conversa** = nome da conversa (título do grupo ou do contato) dentro do pacote; único por `(packageName, conversationKey)`. Simples e estável enquanto o contato não muda de nome.
-- **Dedup**: mensagem é duplicada se na mesma conversa já existe mesmo `sender` + `text` e (mesmo `postedAt` OU mesma chave de notificação). Cobre re-post (mesma chave, horário novo) e atualização MessagingStyle (timestamps estáveis). Mesmo texto em notificações diferentes é mantido.
+- **Dedup**: mensagem é duplicada se na mesma conversa já existe mesmo `sender` + `text` e mesmo `postedAt`. Só para posts simples (`ParsedMessage.hasOwnTimestamp = false`, `postedAt` = horário do post) a mesma chave de notificação também conta, cobrindo re-post com horário novo. Entradas MessagingStyle têm horário próprio e não casam por chave: mensageiros reusam uma chave por conversa, então "ok" duas vezes em horários diferentes são duas mensagens (revisado na v0.4.0, ver [correções da revisão](2026-11-review-fixes.md)).
 - **Apps novos** entram com captura ligada; `setCaptureEnabled` registra o app se ainda não existir.
 - **Eventos `REMOVED`** são ignorados por enquanto (detecção de apagadas é T7).
 - **`metadata`**: extras do snapshot serializados como linhas `chave=valor`; o T9 deve trocar por `Attachment`.

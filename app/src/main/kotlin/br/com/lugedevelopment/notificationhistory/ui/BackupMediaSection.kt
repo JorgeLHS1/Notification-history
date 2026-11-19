@@ -41,7 +41,8 @@ fun BackupMediaSection() {
 
     fun background(work: () -> String) {
         status = res.getString(R.string.backup_working)
-        app.ioExecutor.execute {
+        // Own executor: a long export/import/scan must not hold up notification capture.
+        app.taskExecutor.execute {
             val message = runCatching(work).getOrElse {
                 if (it is InvalidBackupException) res.getString(R.string.backup_invalid) else res.getString(R.string.backup_failed)
             }

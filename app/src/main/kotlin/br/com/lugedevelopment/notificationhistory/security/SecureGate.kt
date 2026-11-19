@@ -41,10 +41,12 @@ fun FragmentActivity.applySecureWindow() {
  * Shows [content] only after biometric / device-credential authentication.
  * Prompts on first open and again on resume after [lock]'s timeout. Fails closed:
  * if the device has no screen lock/biometric enrolled, content stays hidden.
+ * [lock] must outlive the activity (app-scoped, see NotificationHistoryApp.sessionLock):
+ * a lock created in composition would be lost on rotation and prompt again.
  */
 @Composable
 fun SecureGate(
-    lock: SessionLock = remember { SessionLock() },
+    lock: SessionLock,
     content: @Composable () -> Unit,
 ) {
     val activity = LocalContext.current as FragmentActivity

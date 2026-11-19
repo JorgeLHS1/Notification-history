@@ -35,10 +35,16 @@ interface HistoryDao {
     @Query("SELECT * FROM conversation WHERE packageName IN (:packages) ORDER BY lastActivityAt DESC")
     fun conversationsOf(packages: Collection<String>): List<ConversationEntity>
 
+    /**
+     * Same sender + text in the conversation and the same postedAt. With [matchKey] the same
+     * notification key also counts: only for plain posts, whose postedAt is the post time of a
+     * re-posted notification. MessagingStyle messages carry their own timestamp and must not
+     * match by key (chat apps reuse one key per conversation, so "ok" twice would be lost).
+     */
     @Query(
         "SELECT COUNT(*) FROM message WHERE conversationId = :conversationId AND text = :text " +
             "AND ((sender IS NULL AND :sender IS NULL) OR sender = :sender) " +
-            "AND (postedAt = :postedAt OR notificationKey = :notificationKey)",
+            "AND (postedAt = :postedAt OR (:matchKey = 1 AND notificationKey = :notificationKey))",
     )
     fun countDuplicates(
         conversationId: Long,
@@ -46,16 +52,28 @@ interface HistoryDao {
         text: String,
         postedAt: Long,
         notificationKey: String,
+        matchKey: Boolean,
     ): Int
 
-    /** Original message a "deleted" placeholder replaces: same sender, same timestamp preferred, else same notification. */
+    /** Original message a "deleted" placeholder replaces: same sender and same timestamp. */
     @Query(
         "SELECT * FROM message WHERE conversationId = :conversationId AND deleted = 0 " +
             "AND ((sender IS NULL AND :sender IS NULL) OR sender = :sender) " +
-            "AND (postedAt = :postedAt OR notificationKey = :notificationKey) " +
-            "ORDER BY (postedAt = :postedAt) DESC, postedAt DESC, id DESC LIMIT 1",
+            "AND postedAt = :postedAt ORDER BY id DESC LIMIT 1",
     )
-    fun deletionCandidate(conversationId: Long, sender: String?, postedAt: Long, notificationKey: String): MessageEntity?
+    fun deletionCandidateAt(conversationId: Long, sender: String?, postedAt: Long): MessageEntity?
+
+    /**
+     * Fallback for placeholders without a timestamp match: non-deleted messages of the sender
+     * under the same notification key. The Ingestor only uses it when exactly one exists
+     * (LIMIT 2 is enough to tell), so a shared chat key never marks the wrong message.
+     */
+    @Query(
+        "SELECT * FROM message WHERE conversationId = :conversationId AND deleted = 0 " +
+            "AND ((sender IS NULL AND :sender IS NULL) OR sender = :sender) " +
+            "AND notificationKey = :notificationKey ORDER BY id DESC LIMIT 2",
+    )
+    fun deletionCandidatesByKey(conversationId: Long, sender: String?, notificationKey: String): List<MessageEntity>
 
     @Query("UPDATE message SET deleted = 1, deletedAt = :at WHERE id = :id")
     fun markDeleted(id: Long, at: Long)
@@ -68,6 +86,23 @@ interface HistoryDao {
 
     @Query("DELETE FROM message WHERE pinned = 0 AND deleted = 1 AND COALESCE(deletedAt, postedAt) < :cutoff")
     fun deleteExpiredDeletedMessages(cutoff: Long): Int
+
+    /** MEDIA_FILE paths of the messages [deleteExpiredMessages] would remove. */
+    @Query(
+        "SELECT a.value FROM attachment a JOIN message m ON m.id = a.messageId WHERE a.type = 'MEDIA_FILE' " +
+            "AND m.pinned = 0 AND m.deleted = 0 AND m.postedAt < :cutoff",
+    )
+    fun expiringMediaFiles(cutoff: Long): List<String>
+
+    /** MEDIA_FILE paths of the messages [deleteExpiredDeletedMessages] would remove. */
+    @Query(
+        "SELECT a.value FROM attachment a JOIN message m ON m.id = a.messageId WHERE a.type = 'MEDIA_FILE' " +
+            "AND m.pinned = 0 AND m.deleted = 1 AND COALESCE(m.deletedAt, m.postedAt) < :cutoff",
+    )
+    fun expiringDeletedMediaFiles(cutoff: Long): List<String>
+
+    @Query("SELECT value FROM attachment WHERE type = 'MEDIA_FILE' AND messageId IN (:messageIds)")
+    fun mediaFilesOf(messageIds: Collection<Long>): List<String>
 
     @Query("DELETE FROM conversation WHERE id NOT IN (SELECT DISTINCT conversationId FROM message)")
     fun deleteEmptyConversations(): Int
@@ -87,8 +122,12 @@ interface HistoryDao {
     @Query("SELECT * FROM message WHERE conversationId = :conversationId ORDER BY postedAt, id")
     fun messages(conversationId: Long): List<MessageEntity>
 
-    @Query("SELECT * FROM message WHERE conversationId = :conversationId ORDER BY postedAt DESC, id DESC LIMIT 1")
-    fun lastMessage(conversationId: Long): MessageEntity?
+    /** Newest message of every conversation, in one query (no N+1 for the conversation list). */
+    @Query(
+        "SELECT m.* FROM conversation c JOIN message m ON m.id = " +
+            "(SELECT id FROM message WHERE conversationId = c.id ORDER BY postedAt DESC, id DESC LIMIT 1)",
+    )
+    fun lastMessages(): List<MessageEntity>
 
     @Query("SELECT * FROM conversation WHERE id = :id")
     fun conversationById(id: Long): ConversationEntity?

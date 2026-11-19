@@ -12,9 +12,10 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applySecureWindow()
-        val ingestor = (application as NotificationHistoryApp).ingestor
+        val app = application as NotificationHistoryApp
+        val ingestor = app.ingestor
         setContent {
-            SecureGate {
+            SecureGate(lock = app.sessionLock) {
                 OnboardingGate {
                     HistoryUi(ingestor)
                 }

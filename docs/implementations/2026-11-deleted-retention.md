@@ -33,7 +33,7 @@
 
 ## 3. Como foi implementado
 
-- `Ingestor.ingest`: para cada `ParsedMessage`, se `DeletedPlaceholders.matches(text)` → `dao.deletionCandidate(...)` → `dao.markDeleted(id, snapshot.postedAt)`; `IngestResult.Stored` ganhou `markedDeleted`.
+- `Ingestor.ingest`: para cada `ParsedMessage`, se `DeletedPlaceholders.matches(text)` → `deletionTarget(...)` → `dao.markDeleted(id, snapshot.postedAt)`; `IngestResult.Stored` ganhou `markedDeleted`. `deletionTarget` procura mesmo remetente + mesmo `postedAt` (`deletionCandidateAt`); o fallback por chave de notificação (`deletionCandidatesByKey`) só vale quando há exatamente uma candidata não apagada, para não marcar a mais nova por engano. Placeholder sem original não cria conversa (revisado na v0.4.0, ver [correções da revisão](2026-11-review-fixes.md)).
 - `Ingestor.applyRetention(policy, now)`: uma transação com `deleteExpiredMessages`, `deleteExpiredDeletedMessages` e `deleteEmptyConversations`. O índice FTS é mantido por triggers do Room.
 - `WhatsAppParser`: remove sufixo contador ("(3 messages)", "(3 mensagens)") de títulos, separa "Grupo: Remetente" em posts sem MessagingStyle, ignora resumos do app (título = rótulo do app); o resto delega ao `GenericParser`.
 - `RetentionWorker.schedule(context, policy)`: `enqueueUniquePeriodicWork("retention-cleanup", UPDATE, 1 dia)`.

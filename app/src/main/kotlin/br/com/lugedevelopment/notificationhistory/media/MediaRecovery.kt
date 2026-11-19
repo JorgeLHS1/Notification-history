@@ -96,13 +96,26 @@ object MediaMatcher {
     }
 }
 
-/** App-private copy target: files/media/<messageId>_<safe name>. */
+/**
+ * App-private copy target: files/media/<messageId>_<safe name>. Copies are plain files
+ * (not encrypted like the database); app-private storage keeps them away from other apps.
+ */
 class PrivateMediaStore(private val root: File) {
     fun save(messageId: Long, file: MediaFile, input: InputStream): File {
         root.mkdirs()
         val target = File(root, "${messageId}_${MediaMatcher.safeName(file.name)}")
         input.use { src -> target.outputStream().use { src.copyTo(it) } }
         return target
+    }
+
+    /**
+     * Deletes a copy made by [save]. Paths outside [root] are refused (a restored backup could
+     * carry any path in a MEDIA_FILE attachment). Returns true when a file was removed.
+     */
+    fun delete(path: String): Boolean {
+        val target = File(path).canonicalFile
+        if (target.parentFile != root.canonicalFile) return false
+        return target.isFile && target.delete()
     }
 
     companion object {

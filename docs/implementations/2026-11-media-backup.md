@@ -28,7 +28,7 @@
 ## 2. Decisões tomadas
 
 - **Formato v1** (`format = "notification-history-backup"`, `version = 1`): apps, conversas com mensagens aninhadas e anexos aninhados. IDs do banco não são exportados (não são portáveis). Versão maior que a suportada ou formato desconhecido → `InvalidBackupException`, nada é gravado.
-- **Merge**: conversa casada por (pacote, chave); mensagem pela mesma regra de dedup do ingest (conversa + remetente + texto e mesmo `postedAt` ou mesma chave de notificação). Apps já conhecidos mantêm a configuração local. Flags (apagada, fixada, lida, `deletedAt`) das mensagens novas são restauradas; o contador de não lidas é recalculado.
+- **Merge**: conversa casada por (pacote, chave); mensagem por conversa + remetente + texto + mesmo `postedAt` (sem casar por chave de notificação: um backup pode ter várias mensagens iguais sob a mesma chave (revisado na v0.4.0, ver [correções da revisão](2026-11-review-fixes.md))). Apps já conhecidos mantêm a configuração local. Flags (apagada, fixada, lida, `deletedAt`) das mensagens novas são restauradas; o contador de não lidas é recalculado.
 - **Backup não criptografado**: o ZIP sai em texto claro (aviso na UI). Criptografar exige senha do usuário: decisão futura.
 - **Arquivos de mídia não vão no backup**: só as linhas `MEDIA_FILE` (referências a caminhos privados, que não existirão em outro aparelho).
 - **Matching de mídia**: arquivo com `lastModified` mais próximo do `postedAt` dentro de ±2 min, cada arquivo usado uma vez, arquivo já copiado não é oferecido de novo. Heurística: pode errar quando várias fotos chegam no mesmo minuto.
@@ -49,7 +49,9 @@
 - Nova origem de mídia: implemente `MediaSource` e chame `Ingestor.recoverMedia(source, save)`.
 - Mudança de formato do backup: incremente `HistoryBackup.VERSION` e mantenha leitura de versões anteriores em `fromJson`.
 - Gotcha: `MEDIA_FILE` é um valor novo de enum armazenado como texto; versões antigas do app que leiam esse banco falhariam ao converter (sem impacto hoje, DB v1 sem migração).
-- Gotcha: retenção apaga a linha da mensagem (cascade no anexo), mas não o arquivo em `filesDir/media` (limpeza de órfãos pendente).
+- Arquivos copiados são removidos junto com a mensagem (retenção e exclusão pelo usuário) via `deleteMediaFile` do Ingestor → `PrivateMediaStore.delete`, que recusa caminhos fora de `filesDir/media` (revisado na v0.4.0, ver [correções da revisão](2026-11-review-fixes.md)).
+- Gotcha: a mídia copiada fica **sem criptografia** em `filesDir/media` (armazenamento privado do app, inacessível a outros apps sem root); só o banco é criptografado.
+- Backup, importação e varredura de mídia rodam em `NotificationHistoryApp.taskExecutor`, separado do `ioExecutor` da captura.
 
 ## 5. QA manual
 

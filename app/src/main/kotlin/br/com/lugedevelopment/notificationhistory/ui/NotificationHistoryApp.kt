@@ -18,20 +18,17 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.lugedevelopment.notificationhistory.ingest.Ingestor
 import br.com.lugedevelopment.notificationhistory.settings.RetentionSettings
-import kotlinx.coroutines.delay
 
-private const val REFRESH_INTERVAL_MS = 2_000L
-
-/** Runs [block] repeatedly while the screen is at least STARTED, so captured data shows up live. */
+/**
+ * Runs [block] once and then after every committed change to the history (Room invalidation
+ * via [Ingestor.changes]) while the screen is at least STARTED: no polling, no idle reloads.
+ */
 @Composable
-private fun PollWhileVisible(block: suspend () -> Unit) {
+private fun RefreshOnChange(ingestor: Ingestor, block: suspend () -> Unit) {
     val owner = LocalLifecycleOwner.current
-    LaunchedEffect(owner) {
+    LaunchedEffect(owner, ingestor) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                block()
-                delay(REFRESH_INTERVAL_MS)
-            }
+            ingestor.changes().collect { block() }
         }
     }
 }
@@ -59,7 +56,7 @@ fun NotificationHistoryApp(ingestor: Ingestor) {
             showSettings -> {
                 BackHandler { showSettings = false }
                 val vm: SettingsViewModel = viewModel(factory = UiViewModelFactory(ingestor, retention))
-                PollWhileVisible { vm.load() }
+                RefreshOnChange(ingestor) { vm.load() }
                 SettingsScreen(vm, onToggleCapture = vm::onCaptureToggled, onBack = { showSettings = false })
             }
             openId != null -> {
@@ -72,7 +69,7 @@ fun NotificationHistoryApp(ingestor: Ingestor) {
                     key = "conversation-$openId",
                     factory = UiViewModelFactory(ingestor, retention, openId),
                 )
-                PollWhileVisible { vm.load() }
+                RefreshOnChange(ingestor) { vm.load() }
                 ConversationScreen(
                     vm,
                     conversationTitle,
@@ -87,7 +84,7 @@ fun NotificationHistoryApp(ingestor: Ingestor) {
             }
             else -> {
                 val vm: HomeViewModel = viewModel(factory = UiViewModelFactory(ingestor, retention))
-                PollWhileVisible { vm.load() }
+                RefreshOnChange(ingestor) { vm.load() }
                 HomeScreen(
                     vm,
                     onOpenConversation = { id, title ->

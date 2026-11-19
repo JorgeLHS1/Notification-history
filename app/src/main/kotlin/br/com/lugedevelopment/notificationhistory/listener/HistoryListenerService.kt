@@ -5,6 +5,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import br.com.lugedevelopment.notificationhistory.NotificationHistoryApp
 import br.com.lugedevelopment.notificationhistory.ingest.NotificationSnapshot
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Thin bridge: StatusBarNotification -> NotificationSnapshot -> Ingestor (AGENTS.md rule 7).
@@ -14,6 +15,7 @@ import br.com.lugedevelopment.notificationhistory.ingest.NotificationSnapshot
 class HistoryListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
+        labels.clear() // pick up renamed apps after a rebind
         ListenerStatus.setConnected(true)
     }
 
@@ -40,7 +42,12 @@ class HistoryListenerService : NotificationListenerService() {
         }
     }
 
-    private fun labelFor(pkg: String): String = runCatching {
-        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
-    }.getOrDefault(pkg)
+    /** App labels cached per package: avoids a PackageManager IPC for every notification. */
+    private val labels = ConcurrentHashMap<String, String>()
+
+    private fun labelFor(pkg: String): String = labels.getOrPut(pkg) {
+        runCatching {
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+        }.getOrDefault(pkg)
+    }
 }

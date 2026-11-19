@@ -28,7 +28,7 @@ Serviço `NotificationListenerService` fino que converte cada notificação post
 
 ## 2. Decisões Tomadas & Justificativas
 - **Sem BroadcastReceiver de boot**: o sistema religa listeners habilitados após reboot sozinho; um receiver exigiria `RECEIVE_BOOT_COMPLETED` sem ganho. Em `onListenerDisconnected` chamamos `requestRebind` como reforço.
-- **Application como composition root**: `NotificationHistoryApp.ingestor` (lazy) e `ioExecutor` (thread única, preserva ordem de chegada). Serviço, UI e workers reutilizam; ninguém cria outro Ingestor.
+- **Application como composition root**: `NotificationHistoryApp.ingestor` (lazy) e `ioExecutor` (thread única, preserva ordem de chegada, só captura). Serviço, UI e workers reutilizam; ninguém cria outro Ingestor. Tarefas longas do usuário (backup, mídia) usam `taskExecutor`; o serviço guarda rótulos de apps em cache por pacote (limpo em `onListenerConnected`), sem IPC ao `PackageManager` a cada notificação (revisado na v0.4.0, ver [correções da revisão](2026-11-review-fixes.md)).
 - **Mapeamento na thread do binder, ingestão fora dela**: o Room é bloqueante; o `sbn` é lido antes de enfileirar.
 - **Nenhuma regra no serviço** (AGENTS.md regra 7): nem filtro por app, nem descarte de resumos de grupo (campo `isGroupSummary` é só copiado). Erros são engolidos com `runCatching` para nunca derrubar o serviço.
 - **Rótulo do app**: via `PackageManager`; se o pacote não for visível (Android 11+ sem visibilidade), cai para o nome do pacote.

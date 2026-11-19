@@ -11,12 +11,20 @@ import br.com.lugedevelopment.notificationhistory.backup.BackupMessage
 import br.com.lugedevelopment.notificationhistory.backup.HistoryBackup
 import br.com.lugedevelopment.notificationhistory.backup.ImportResult
 import br.com.lugedevelopment.notificationhistory.data.AttachmentType
+import br.com.lugedevelopment.notificationhistory.ingest.parser.ParsedMessage
 import br.com.lugedevelopment.notificationhistory.ingest.parser.ParserRegistry
 import br.com.lugedevelopment.notificationhistory.media.MediaCandidate
 import br.com.lugedevelopment.notificationhistory.media.MediaFile
 import br.com.lugedevelopment.notificationhistory.media.MediaMatcher
 import br.com.lugedevelopment.notificationhistory.media.MediaRecoveryResult
 import br.com.lugedevelopment.notificationhistory.media.MediaSource
+import androidx.room.InvalidationTracker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -47,6 +55,12 @@ data class SearchHit(val message: MessageEntity, val conversation: ConversationE
 class Ingestor(
     private val database: HistoryDatabase,
     val parsers: ParserRegistry = ParserRegistry(),
+    /**
+     * Removes a copied media file (MEDIA_FILE value) once its message is gone. Called after the
+     * deleting transaction commits. Default no-op keeps tests pure; the app wires
+     * [br.com.lugedevelopment.notificationhistory.media.PrivateMediaStore.delete].
+     */
+    private val deleteMediaFile: (path: String) -> Unit = {},
 ) {
     private val dao = database.historyDao()
 
@@ -66,21 +80,13 @@ class Ingestor(
         var markedDeleted = 0
         var lastStoredId: Long? = null
         for (message in parsed) {
-            var conversation = dao.conversation(snapshot.packageName, message.conversationKey)
-                ?: ConversationEntity(
-                    packageName = snapshot.packageName,
-                    conversationKey = message.conversationKey,
-                    title = message.conversationTitle,
-                    isGroup = message.isGroup,
-                    lastActivityAt = message.postedAt,
-                ).let { it.copy(id = dao.insertConversation(it)) }
+            val existing = dao.conversation(snapshot.packageName, message.conversationKey)
 
             if (DeletedPlaceholders.matches(message.text)) {
                 // The app replaced a captured message with a "deleted" placeholder:
-                // flag the original and keep its text; the placeholder itself is not stored.
-                val original = dao.deletionCandidate(
-                    conversation.id, message.sender, message.postedAt, snapshot.key,
-                )
+                // flag the original and keep its text; the placeholder itself is not stored,
+                // and no conversation is created when there is nothing to mark.
+                val original = existing?.let { deletionTarget(it.id, message, snapshot.key) }
                 if (original != null) {
                     dao.markDeleted(original.id, snapshot.postedAt)
                     markedDeleted++
@@ -88,13 +94,22 @@ class Ingestor(
                 continue
             }
 
-            val isDuplicate = dao.countDuplicates(
-                conversation.id, message.sender, message.text, message.postedAt, snapshot.key,
+            val isDuplicate = existing != null && dao.countDuplicates(
+                existing.id, message.sender, message.text, message.postedAt, snapshot.key,
+                matchKey = !message.hasOwnTimestamp,
             ) > 0
             if (isDuplicate) {
                 duplicates++
                 continue
             }
+            var conversation = existing
+                ?: ConversationEntity(
+                    packageName = snapshot.packageName,
+                    conversationKey = message.conversationKey,
+                    title = message.conversationTitle,
+                    isGroup = message.isGroup,
+                    lastActivityAt = message.postedAt,
+                ).let { it.copy(id = dao.insertConversation(it)) }
             val messageId = dao.insertMessage(
                 MessageEntity(
                     conversationId = conversation.id,
@@ -125,6 +140,16 @@ class Ingestor(
         IngestResult.Stored(stored, duplicates, markedDeleted)
     }
 
+    /**
+     * Message a placeholder replaces: same sender and timestamp; else, only when it is
+     * unambiguous, the single non-deleted message of that sender under the same notification
+     * key (plain posts re-posted with a new time). Chat apps reuse one key per conversation,
+     * so several candidates mean "unknown" and nothing is marked.
+     */
+    private fun deletionTarget(conversationId: Long, message: ParsedMessage, key: String): MessageEntity? =
+        dao.deletionCandidateAt(conversationId, message.sender, message.postedAt)
+            ?: dao.deletionCandidatesByKey(conversationId, message.sender, key).singleOrNull()
+
     // --- Retention --------------------------------------------------------------------
 
     /**
@@ -132,12 +157,29 @@ class Ingestor(
      * (by postedAt) and deleted ones older than [RetentionPolicy.deletedDays] (by deletedAt).
      * Pinned messages never expire. Conversations left empty are removed.
      */
-    fun applyRetention(policy: RetentionPolicy = RetentionPolicy(), now: Long = System.currentTimeMillis()): RetentionResult =
-        database.runInTransaction<RetentionResult> {
-            val general = policy.generalDays?.let { dao.deleteExpiredMessages(now - it * DAY_MS) } ?: 0
-            val deleted = policy.deletedDays?.let { dao.deleteExpiredDeletedMessages(now - it * DAY_MS) } ?: 0
+    fun applyRetention(policy: RetentionPolicy = RetentionPolicy(), now: Long = System.currentTimeMillis()): RetentionResult {
+        val media = ArrayList<String>()
+        val result = database.runInTransaction<RetentionResult> {
+            val general = policy.generalDays?.let { days ->
+                val cutoff = now - days * DAY_MS
+                media += dao.expiringMediaFiles(cutoff)
+                dao.deleteExpiredMessages(cutoff)
+            } ?: 0
+            val deleted = policy.deletedDays?.let { days ->
+                val cutoff = now - days * DAY_MS
+                media += dao.expiringDeletedMediaFiles(cutoff)
+                dao.deleteExpiredDeletedMessages(cutoff)
+            } ?: 0
             RetentionResult(general, deleted, dao.deleteEmptyConversations())
         }
+        removeMediaFiles(media)
+        return result
+    }
+
+    /** Deletes copied media files of removed messages; a failure on one file does not stop the rest. */
+    private fun removeMediaFiles(paths: Collection<String>) {
+        for (path in paths.distinct()) runCatching { deleteMediaFile(path) }
+    }
 
     fun setPinned(messageId: Long, pinned: Boolean) = dao.setPinned(messageId, pinned)
 
@@ -186,7 +228,12 @@ class Ingestor(
      */
     fun deleteMessages(messageIds: Collection<Long>): Int {
         var removed = 0
-        bulk(messageIds) { ids -> removed += dao.deleteMessages(ids) }
+        val media = ArrayList<String>()
+        bulk(messageIds) { ids ->
+            media += dao.mediaFilesOf(ids)
+            removed += dao.deleteMessages(ids)
+        }
+        removeMediaFiles(media)
         return removed
     }
 
@@ -241,7 +288,8 @@ class Ingestor(
                     ?: c.copy(id = 0, unreadCount = 0).let { newConversations++; it.copy(id = dao.insertConversation(it)) }
                 for (bm in bc.messages) {
                     val m = bm.message
-                    if (dao.countDuplicates(conversation.id, m.sender, m.text, m.postedAt, m.notificationKey) > 0) {
+                    // Exact timestamp only: one backup can hold several equal messages under one key.
+                    if (dao.countDuplicates(conversation.id, m.sender, m.text, m.postedAt, m.notificationKey, matchKey = false) > 0) {
                         duplicates++
                         continue
                     }
@@ -311,9 +359,27 @@ class Ingestor(
 
     /** Conversations, most recent first. [packages] null or empty means all apps. */
     fun conversations(packages: Set<String>? = null): List<ConversationSummary> {
-        val rows = if (packages.isNullOrEmpty()) dao.conversations() else dao.conversationsOf(packages)
-        return rows.map { ConversationSummary(it, dao.lastMessage(it.id)) }
+        return database.runInTransaction<List<ConversationSummary>> {
+            val rows = if (packages.isNullOrEmpty()) dao.conversations() else dao.conversationsOf(packages)
+            val last = dao.lastMessages().associateBy { it.conversationId }
+            rows.map { ConversationSummary(it, last[it.id]) }
+        }
     }
+
+    /**
+     * Emits once right away and again after every committed change to the history tables
+     * (Room invalidation), conflated: screens reload only when something changed.
+     */
+    fun changes(): Flow<Unit> = callbackFlow {
+        val observer = object : InvalidationTracker.Observer(arrayOf("app", "conversation", "message", "attachment")) {
+            override fun onInvalidated(tables: Set<String>) {
+                trySend(Unit)
+            }
+        }
+        trySend(Unit)
+        database.invalidationTracker.addObserver(observer)
+        awaitClose { database.invalidationTracker.removeObserver(observer) }
+    }.conflate().flowOn(Dispatchers.IO)
 
     /** Messages of a conversation, oldest first. */
     fun messages(conversationId: Long): List<MessageEntity> = dao.messages(conversationId)

@@ -1,4 +1,4 @@
-﻿package br.com.lugedevelopment.notificationhistory.listener
+package br.com.lugedevelopment.notificationhistory.listener
 
 import android.app.Notification
 import androidx.core.app.NotificationCompat
@@ -8,6 +8,10 @@ import br.com.lugedevelopment.notificationhistory.ingest.SnapshotMessage
 
 /** Pure field copy from a platform [Notification] to a [NotificationSnapshot]. No rules here. */
 object SnapshotMapper {
+    /** Notification.EXTRA_PICTURE_URI / EXTRA_PICTURE_ICON (API 31+), as literal keys. */
+    const val EXTRA_PICTURE_URI = "android.pictureUri"
+    const val EXTRA_PICTURE_ICON = "android.pictureIcon"
+
     fun map(
         packageName: String,
         appLabel: String,
@@ -26,9 +30,13 @@ object SnapshotMapper {
             extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.let { put("bigText", it.toString()) }
             extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.let { put("subText", it.toString()) }
             // References only (no pixels): the URI when the app gives one, else a marker.
-            extras?.getString("android.pictureUri") // EXTRA_PICTURE_URI needs API 31?.let { put(AttachmentExtras.PICTURE, it) }
-                ?: extras?.takeIf { it.containsKey(Notification.EXTRA_PICTURE) }
-                    ?.let { put(AttachmentExtras.PICTURE, "embedded") }
+            // EXTRA_PICTURE_URI needs API 31 (minSdk 26): literal key; value may be a String or a Uri.
+            @Suppress("DEPRECATION")
+            val pictureUri = extras?.get(EXTRA_PICTURE_URI)?.toString()?.takeIf { it.isNotBlank() }
+            val picture = pictureUri
+                ?: extras?.takeIf { it.containsKey(Notification.EXTRA_PICTURE) || it.containsKey(EXTRA_PICTURE_ICON) }
+                    ?.let { "embedded" }
+            picture?.let { put(AttachmentExtras.PICTURE, it) }
             if (extras?.containsKey(Notification.EXTRA_LARGE_ICON) == true) put(AttachmentExtras.LARGE_ICON, "embedded")
             notification.actions.orEmpty().forEachIndexed { i, a ->
                 a.title?.toString()?.let { put("${AttachmentExtras.ACTION_PREFIX}$i", it) }

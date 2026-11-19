@@ -30,7 +30,7 @@
 - **Telegram**: posts simples de grupo usam título "Remetente @ Grupo" e viram conversa de grupo. Instagram e Messenger: grupos vêm em MessagingStyle (caminho genérico); posts simples são tratados como 1:1.
 - **Anexos de texto (links)** são extraídos de cada mensagem nova; **anexos de notificação** (imagem, ícone grande, ações) vão para a mensagem nova mais recente do snapshot. Duplicadas não geram anexos.
 - **Só referências, nunca pixels**: imagem/ícone guardam a URI se o app a fornece, senão o marcador `embedded`. Ações guardam o rótulo do botão.
-- `EXTRA_PICTURE_URI` exige API 31; usada a chave literal `android.pictureUri` (minSdk 26).
+- `EXTRA_PICTURE_URI` exige API 31; usada a chave literal `android.pictureUri` (minSdk 26), lida como String ou Uri. Sem URI, `EXTRA_PICTURE`/`android.pictureIcon` viram o marcador `embedded`. (Até a v0.4.0 a expressão estava dentro de um comentário e a URI era perdida; ver [correções da revisão](2026-11-review-fixes.md).)
 - Fixtures sintéticas; formatos de título são heurísticas a confirmar em aparelho.
 
 ## 3. Guia para futuros agentes

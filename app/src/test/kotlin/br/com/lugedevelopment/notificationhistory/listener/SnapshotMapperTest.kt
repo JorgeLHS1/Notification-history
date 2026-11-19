@@ -5,6 +5,9 @@ import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.test.core.app.ApplicationProvider
+import android.graphics.Bitmap
+import android.os.Bundle
+import br.com.lugedevelopment.notificationhistory.ingest.AttachmentExtras
 import br.com.lugedevelopment.notificationhistory.ingest.NotificationSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,5 +59,28 @@ class SnapshotMapperTest {
         val s = map(n, NotificationSnapshot.Event.REMOVED)
         assertTrue(s.isGroupSummary)
         assertEquals(NotificationSnapshot.Event.REMOVED, s.event)
+    }
+
+    @Test
+    fun pictureUriIsKeptAsAttachmentReference() {
+        val n = NotificationCompat.Builder(ctx, "c").setContentTitle("Ana").setContentText("photo")
+            .addExtras(Bundle().apply { putString(SnapshotMapper.EXTRA_PICTURE_URI, "content://example/pic/1") })
+            .build()
+        assertEquals("content://example/pic/1", map(n).extras[AttachmentExtras.PICTURE])
+    }
+
+    @Test
+    fun embeddedPictureWithoutUriIsMarked() {
+        val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+        val n = NotificationCompat.Builder(ctx, "c").setContentTitle("Ana").setContentText("photo")
+            .setStyle(NotificationCompat.BigPictureStyle().bigPicture(bitmap))
+            .build()
+        assertEquals("embedded", map(n).extras[AttachmentExtras.PICTURE])
+    }
+
+    @Test
+    fun noPictureMeansNoPictureExtra() {
+        val n = NotificationCompat.Builder(ctx, "c").setContentTitle("Ana").setContentText("hi").build()
+        assertFalse(map(n).extras.containsKey(AttachmentExtras.PICTURE))
     }
 }

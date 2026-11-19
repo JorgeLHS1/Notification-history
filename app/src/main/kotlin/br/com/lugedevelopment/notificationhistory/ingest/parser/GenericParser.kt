@@ -30,6 +30,7 @@ class GenericParser : NotificationParser {
                         sender = it.sender ?: if (isGroup) null else name,
                         text = it.text,
                         postedAt = it.timestamp,
+                        hasOwnTimestamp = true,
                     )
                 }
         }
