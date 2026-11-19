@@ -77,3 +77,10 @@
 - **Cause:** `DateUtils.formatDateTime(null, ...)` needs a real `Context` on device; Robolectric tolerated `null`, so unit tests passed.
 - **Fix:** `formatTime` now uses `java.text.DateFormat` (short time today, short date otherwise, device locale). No `Context` needed.
 - **Gotcha for future agents:** never pass `null` as `Context` to framework helpers; Robolectric hides it. Verified on the Xiaomi 2311DRK48G (Android 16).
+
+## Device fix: Export/Import/Choose folder crash ("lower 16 bits for requestCode")
+
+- **Symptom:** tapping Export, Import or Choose folder in Settings crashed with `IllegalArgumentException: Can only use lower 16 bits for requestCode`.
+- **Cause:** `MainActivity` is a `FragmentActivity` (required by BiometricPrompt). `androidx.biometric:1.1.0` pulls `androidx.fragment:1.2.5`, whose `FragmentActivity` predates the Activity Result API (fragment >= 1.3.0) and rejects its request codes.
+- **Fix:** declare `androidx.fragment:fragment-ktx:1.8.9` explicitly (`gradle/libs.versions.toml`), so every `rememberLauncherForActivityResult` works.
+- **Gotcha:** unit tests can't catch this (no real activity launch); verified on the Xiaomi 2311DRK48G by opening the Export picker.

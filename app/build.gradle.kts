@@ -67,6 +67,7 @@ dependencies {
 
     implementation(libs.sqlcipher.android)
     implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
