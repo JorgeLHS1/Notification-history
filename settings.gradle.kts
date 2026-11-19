@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "NotificationHistory"
 include(":app")
+include(":qa-sender")

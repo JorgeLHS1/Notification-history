@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NH QA Sender</string>
+    <string name="channel_name">QA chats</string>
+    <string name="message_hint">Message text</string>
+    <string name="send">Send</string>
+    <string name="mark_read">Mark read</string>
+    <string name="send_duplicate">Send duplicate</string>
+    <string name="delete_remove">Delete (remove)</string>
+    <string name="delete_placeholder">Delete (placeholder)</string>
+    <string name="no_messages">No messages yet.</string>
+    <string name="other_notifications">Other notifications</string>
+    <string name="post_plain">Plain notification</string>
+    <string name="post_link">Notification with link</string>
+    <string name="post_picture">Notification with picture</string>
+    <string name="reset">Reset all</string>
+    <string name="plain_title">QA plain notification</string>
+    <string name="plain_text">Plain text without a conversation style</string>
+    <string name="link_title">QA link notification</string>
+    <string name="link_text">Open https://example.org/qa-link for details</string>
+    <string name="picture_title">QA picture notification</string>
+    <string name="picture_text">Notification with a generated picture</string>
+</resources>
