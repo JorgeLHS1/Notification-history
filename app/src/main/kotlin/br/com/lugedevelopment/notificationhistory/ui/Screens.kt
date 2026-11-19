@@ -42,7 +42,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
@@ -50,6 +57,7 @@ import br.com.lugedevelopment.notificationhistory.R
 import br.com.lugedevelopment.notificationhistory.data.AppEntity
 import br.com.lugedevelopment.notificationhistory.data.MessageEntity
 import br.com.lugedevelopment.notificationhistory.ingest.ConversationSummary
+import br.com.lugedevelopment.notificationhistory.ingest.LinkExtractor
 import br.com.lugedevelopment.notificationhistory.settings.RetentionSettings
 
 // --- Shared helpers -------------------------------------------------------------------
@@ -262,6 +270,29 @@ fun ConversationScreen(viewModel: ConversationViewModel, title: String, onBack: 
     }
 }
 
+/** Message text with http(s) links turned into tappable spans (opened by the system). */
+@Composable
+private fun linkified(text: String): AnnotatedString {
+    val links = remember(text) { LinkExtractor.find(text) }
+    val color = MaterialTheme.colorScheme.primary
+    return remember(text, color) {
+        buildAnnotatedString {
+            var cursor = 0
+            for (link in links) {
+                append(text.substring(cursor, link.start))
+                withLink(
+                    LinkAnnotation.Url(
+                        link.url,
+                        TextLinkStyles(SpanStyle(color = color, textDecoration = TextDecoration.Underline)),
+                    ),
+                ) { append(link.url) }
+                cursor = link.end
+            }
+            append(text.substring(cursor))
+        }
+    }
+}
+
 @Composable
 private fun MessageBubble(message: MessageEntity) {
     Card(
@@ -289,7 +320,7 @@ private fun MessageBubble(message: MessageEntity) {
                 )
                 if (message.deleted) DeletedBadge()
             }
-            Text(message.text, style = MaterialTheme.typography.bodyMedium)
+            Text(linkified(message.text), style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = formatTime(message.postedAt),
                 style = MaterialTheme.typography.labelSmall,
