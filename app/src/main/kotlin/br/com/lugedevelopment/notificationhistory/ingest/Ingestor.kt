@@ -21,6 +21,9 @@ data class ConversationSummary(
     val lastMessage: MessageEntity?,
 )
 
+/** A search result: the matching message and the conversation that holds it. */
+data class SearchHit(val message: MessageEntity, val conversation: ConversationEntity)
+
 /**
  * The single seam of the app: receives [NotificationSnapshot]s and owns capture rules,
  * parsing, grouping, dedup and persistence, plus the query surface for the UI.
@@ -115,6 +118,68 @@ class Ingestor(
 
     fun setPinned(messageId: Long, pinned: Boolean) = dao.setPinned(messageId, pinned)
 
+    // --- Search and bulk operations (T8) -----------------------------------------------
+
+    /**
+     * Full-text search over sender and text. Every word of [query] must match as a prefix
+     * (partial words work), case-insensitively for ASCII. [deletedOnly] keeps only deleted
+     * messages; with a blank [query] it lists all deleted messages. A blank query without
+     * [deletedOnly] returns nothing. [packages] null or empty means all apps. Newest first.
+     */
+    fun search(
+        query: String,
+        deletedOnly: Boolean = false,
+        packages: Set<String>? = null,
+        limit: Int = SEARCH_LIMIT,
+    ): List<SearchHit> {
+        val anyPackage = packages.isNullOrEmpty()
+        val scope = packages ?: emptySet()
+        val match = SearchText.matchExpression(query)
+        val rows = when {
+            match != null -> dao.search(match, deletedOnly, anyPackage, scope, limit)
+            deletedOnly && query.isBlank() -> dao.deletedMessages(anyPackage, scope, limit)
+            else -> emptyList()
+        }
+        val conversations = HashMap<Long, ConversationEntity?>()
+        return rows.mapNotNull { message ->
+            val conversation = conversations.getOrPut(message.conversationId) { dao.conversationById(message.conversationId) }
+            conversation?.let { SearchHit(message, it) }
+        }
+    }
+
+    /** Marks the messages read or unread and recomputes the unread counter of their conversations. */
+    fun setRead(messageIds: Collection<Long>, read: Boolean) = bulk(messageIds) { ids ->
+        dao.setRead(ids, read)
+    }
+
+    /** Pins or unpins the messages (pinned messages never expire). */
+    fun setPinned(messageIds: Collection<Long>, pinned: Boolean) = bulk(messageIds) { ids ->
+        dao.setPinned(ids, pinned)
+    }
+
+    /**
+     * Deletes the messages for good (pinned ones too, since the user picked them), refreshes
+     * the unread counters and removes conversations left empty. Returns how many were deleted.
+     */
+    fun deleteMessages(messageIds: Collection<Long>): Int {
+        var removed = 0
+        bulk(messageIds) { ids -> removed += dao.deleteMessages(ids) }
+        return removed
+    }
+
+    private fun bulk(messageIds: Collection<Long>, action: (List<Long>) -> Unit) {
+        if (messageIds.isEmpty()) return
+        database.runInTransaction {
+            val touched = HashSet<Long>()
+            for (chunk in messageIds.distinct().chunked(BULK_CHUNK)) {
+                touched += dao.conversationIdsOf(chunk)
+                action(chunk)
+            }
+            for (chunk in touched.chunked(BULK_CHUNK)) dao.recountUnread(chunk)
+            dao.deleteEmptyConversations()
+        }
+    }
+
     // --- App filter -------------------------------------------------------------------
 
     fun apps(): List<AppEntity> = dao.apps()
@@ -140,6 +205,8 @@ class Ingestor(
 
     private companion object {
         const val DAY_MS = 24L * 60 * 60 * 1000
+        const val SEARCH_LIMIT = 200
+        const val BULK_CHUNK = 500
     }
 }
 

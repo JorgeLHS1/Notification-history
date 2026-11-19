@@ -1,9 +1,22 @@
 package br.com.lugedevelopment.notificationhistory.ui
 
 import android.text.format.DateUtils
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import br.com.lugedevelopment.notificationhistory.ingest.SearchHit
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -124,28 +137,76 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onOpenConversation: (id: Long, title: String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenMessage: (conversationId: Long, title: String, messageId: Long, query: String) -> Unit = { id, title, _, _ ->
+        onOpenConversation(id, title)
+    },
 ) {
     val state by viewModel.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    var confirmDelete by remember { mutableStateOf(false) }
     val appLabels = remember(state.apps) { state.apps.associate { it.packageName to it.label } }
+    val selecting = state.selection.isNotEmpty()
+    BackHandler(enabled = selecting) { viewModel.clearSelection() }
+    BackHandler(enabled = !selecting && state.searchOpen) { viewModel.closeSearch() }
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.home_title)) },
-                actions = {
-                    TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.settings_title)) }
-                },
-            )
+            when {
+                selecting -> SelectionTopBar(state.selection.size, onCancel = viewModel::clearSelection)
+                state.searchOpen -> SearchTopBar(state.query, viewModel::setQuery, onClose = viewModel::closeSearch)
+                else -> CenterAlignedTopAppBar(
+                    title = { Text(stringResource(R.string.home_title)) },
+                    actions = {
+                        TextButton(onClick = viewModel::openSearch) { Text(stringResource(R.string.search_action)) }
+                        TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.settings_title)) }
+                    },
+                )
+            }
+        },
+        bottomBar = {
+            if (selecting) {
+                SelectionActionBar(
+                    onMarkRead = { scope.launch { viewModel.markSelectedRead(true) } },
+                    onMarkUnread = { scope.launch { viewModel.markSelectedRead(false) } },
+                    onPin = { scope.launch { viewModel.pinSelected(true) } },
+                    onUnpin = { scope.launch { viewModel.pinSelected(false) } },
+                    onDelete = { confirmDelete = true },
+                )
+            }
         },
     ) { padding ->
+        if (confirmDelete) {
+            ConfirmDeleteDialog(
+                count = state.selection.size,
+                onConfirm = {
+                    confirmDelete = false
+                    scope.launch { viewModel.deleteSelected() }
+                },
+                onDismiss = { confirmDelete = false },
+            )
+        }
         Column(Modifier.padding(padding).fillMaxSize()) {
             FilterChips(
                 apps = state.apps,
                 selected = state.selected,
                 onToggle = viewModel::toggleApp,
                 onClear = viewModel::clearFilter,
+                deletedOnly = if (state.searchOpen) state.deletedOnly else null,
+                onDeletedOnlyChange = viewModel::setDeletedOnly,
             )
             when {
                 !state.loaded -> Box(Modifier.fillMaxSize())
+                state.searchOpen -> SearchResults(
+                    state = state,
+                    appLabels = appLabels,
+                    onClick = { hit ->
+                        if (selecting) {
+                            viewModel.toggleSelected(hit.message.id)
+                        } else {
+                            onOpenMessage(hit.conversation.id, hit.conversation.title, hit.message.id, state.query)
+                        }
+                    },
+                    onLongClick = { viewModel.toggleSelected(it.message.id) },
+                )
                 state.conversations.isEmpty() -> EmptyMessage(stringResource(R.string.home_empty))
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     items(state.conversations, key = { it.conversation.id }) { row ->
@@ -163,13 +224,79 @@ fun HomeScreen(
 }
 
 @Composable
+private fun SearchResults(
+    state: HomeState,
+    appLabels: Map<String, String>,
+    onClick: (SearchHit) -> Unit,
+    onLongClick: (SearchHit) -> Unit,
+) {
+    when {
+        !state.searching -> EmptyMessage(stringResource(R.string.search_prompt))
+        state.hits.isEmpty() -> EmptyMessage(stringResource(R.string.search_no_results))
+        else -> {
+            val highlight = MaterialTheme.colorScheme.tertiaryContainer
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(state.hits, key = { it.message.id }) { hit ->
+                    val message = hit.message
+                    val selectedRow = message.id in state.selection
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(if (selectedRow) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                            .combinedClickable(onClick = { onClick(hit) }, onLongClick = { onLongClick(hit) })
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        val pkg = hit.conversation.packageName
+                        AppIcon(pkg, appLabels[pkg] ?: pkg, Modifier.size(40.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = hit.conversation.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                if (message.deleted) DeletedBadge()
+                                if (message.pinned) PinnedBadge()
+                            }
+                            Text(
+                                text = highlighted(message.text, state.query, highlight),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (message.read) FontWeight.Normal else FontWeight.Bold,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            text = formatTime(message.postedAt),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun FilterChips(
     apps: List<AppEntity>,
     selected: Set<String>,
     onToggle: (String) -> Unit,
     onClear: () -> Unit,
+    /** Null hides the chip (outside search mode). */
+    deletedOnly: Boolean? = null,
+    onDeletedOnlyChange: (Boolean) -> Unit = {},
 ) {
-    if (apps.isEmpty()) return
+    if (apps.isEmpty() && deletedOnly == null) return
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -177,6 +304,13 @@ private fun FilterChips(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (deletedOnly != null) {
+            FilterChip(
+                selected = deletedOnly,
+                onClick = { onDeletedOnlyChange(!deletedOnly) },
+                label = { Text(stringResource(R.string.filter_deleted_only)) },
+            )
+        }
         FilterChip(
             selected = selected.isEmpty(),
             onClick = onClear,
@@ -238,39 +372,122 @@ private fun ConversationRow(row: ConversationSummary, appLabel: String, onClick:
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationScreen(viewModel: ConversationViewModel, title: String, onBack: () -> Unit) {
+fun ConversationScreen(
+    viewModel: ConversationViewModel,
+    title: String,
+    onBack: () -> Unit,
+    /** Message to scroll to and emphasize when the screen opens from a search result. */
+    focusMessageId: Long? = null,
+    /** Search words highlighted inside the messages. */
+    query: String = "",
+) {
     val state by viewModel.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    var confirmDelete by remember { mutableStateOf(false) }
+    var focusHandled by rememberSaveable(focusMessageId) { mutableStateOf(false) }
+    val selecting = state.selection.isNotEmpty()
+    BackHandler(enabled = selecting) { viewModel.clearSelection() }
+
+    LaunchedEffect(state.loaded, focusMessageId) {
+        if (state.loaded && focusMessageId != null && !focusHandled) {
+            val index = state.messages.indexOfFirst { it.id == focusMessageId }
+            if (index >= 0) listState.scrollToItem(index)
+            focusHandled = true
+        }
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(R.string.back)) } },
-            )
+            if (selecting) {
+                SelectionTopBar(state.selection.size, onCancel = viewModel::clearSelection)
+            } else {
+                TopAppBar(
+                    title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(R.string.back)) } },
+                )
+            }
+        },
+        bottomBar = {
+            if (selecting) {
+                SelectionActionBar(
+                    onMarkRead = { scope.launch { viewModel.markSelectedRead(true) } },
+                    onMarkUnread = { scope.launch { viewModel.markSelectedRead(false) } },
+                    onPin = { scope.launch { viewModel.pinSelected(true) } },
+                    onUnpin = { scope.launch { viewModel.pinSelected(false) } },
+                    onDelete = { confirmDelete = true },
+                )
+            }
         },
     ) { padding ->
+        if (confirmDelete) {
+            ConfirmDeleteDialog(
+                count = state.selection.size,
+                onConfirm = {
+                    confirmDelete = false
+                    scope.launch { viewModel.deleteSelected() }
+                },
+                onDismiss = { confirmDelete = false },
+            )
+        }
         when {
             !state.loaded -> Box(Modifier.padding(padding).fillMaxSize())
             state.messages.isEmpty() -> EmptyMessage(stringResource(R.string.conversation_empty), Modifier.padding(padding))
             else -> LazyColumn(
+                state = listState,
                 modifier = Modifier.padding(padding).fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(state.messages, key = { it.id }) { MessageBubble(it) }
+                items(state.messages, key = { it.id }) { message ->
+                    MessageBubble(
+                        message = message,
+                        query = query,
+                        selected = message.id in state.selection,
+                        focused = message.id == focusMessageId,
+                        onClick = { if (selecting) viewModel.toggleSelected(message.id) },
+                        onLongClick = { viewModel.toggleSelected(message.id) },
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun MessageBubble(message: MessageEntity) {
+private fun PinnedBadge() {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+    ) {
+        Text(
+            text = stringResource(R.string.pinned_badge),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+    }
+}
+
+@Composable
+private fun MessageBubble(
+    message: MessageEntity,
+    query: String,
+    selected: Boolean,
+    focused: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .let { if (focused) it.border(2.dp, MaterialTheme.colorScheme.tertiary, CardDefaults.shape) else it }
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         colors = CardDefaults.cardColors(
-            containerColor = if (message.deleted) {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
+            containerColor = when {
+                selected -> MaterialTheme.colorScheme.secondaryContainer
+                message.deleted -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                else -> MaterialTheme.colorScheme.surfaceVariant
             },
         ),
     ) {
@@ -287,9 +504,14 @@ private fun MessageBubble(message: MessageEntity) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (message.pinned) PinnedBadge()
                 if (message.deleted) DeletedBadge()
             }
-            Text(message.text, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = highlighted(message.text, query, MaterialTheme.colorScheme.tertiaryContainer),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (message.read) FontWeight.Normal else FontWeight.Bold,
+            )
             Text(
                 text = formatTime(message.postedAt),
                 style = MaterialTheme.typography.labelSmall,

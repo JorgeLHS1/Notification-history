@@ -7,6 +7,7 @@ import br.com.lugedevelopment.notificationhistory.data.AppEntity
 import br.com.lugedevelopment.notificationhistory.data.MessageEntity
 import br.com.lugedevelopment.notificationhistory.ingest.ConversationSummary
 import br.com.lugedevelopment.notificationhistory.ingest.Ingestor
+import br.com.lugedevelopment.notificationhistory.ingest.SearchHit
 import br.com.lugedevelopment.notificationhistory.settings.RetentionSettings
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +29,18 @@ data class HomeState(
     val selected: Set<String> = emptySet(),
     val conversations: List<ConversationSummary> = emptyList(),
     val loaded: Boolean = false,
-)
+    /** Search bar visible (kept in the ViewModel so it survives opening a conversation). */
+    val searchOpen: Boolean = false,
+    /** Free-text search query; blank means the plain conversation list. */
+    val query: String = "",
+    /** Restricts search results to messages the sender deleted. */
+    val deletedOnly: Boolean = false,
+    val hits: List<SearchHit> = emptyList(),
+    /** Message ids selected among the search results. */
+    val selection: Set<Long> = emptySet(),
+) {
+    val searching: Boolean get() = query.isNotBlank() || deletedOnly
+}
 
 class HomeViewModel(
     private val ingestor: Ingestor,
@@ -38,11 +50,62 @@ class HomeViewModel(
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
     suspend fun load() {
-        val selected = _state.value.selected
-        val (apps, conversations) = withContext(io) {
-            ingestor.apps() to ingestor.conversations(selected)
+        val current = _state.value
+        val (apps, conversations, hits) = withContext(io) {
+            Triple(
+                ingestor.apps(),
+                ingestor.conversations(current.selected),
+                if (current.searching) ingestor.search(current.query, current.deletedOnly, current.selected) else emptyList(),
+            )
         }
-        _state.update { it.copy(apps = apps, conversations = conversations, loaded = true) }
+        _state.update {
+            val alive = hits.map { hit -> hit.message.id }.toSet()
+            it.copy(apps = apps, conversations = conversations, hits = hits, selection = it.selection intersect alive, loaded = true)
+        }
+    }
+
+    fun openSearch() {
+        _state.update { it.copy(searchOpen = true) }
+    }
+
+    fun setQuery(query: String) {
+        _state.update { it.copy(query = query, selection = emptySet()) }
+        refresh()
+    }
+
+    fun setDeletedOnly(deletedOnly: Boolean) {
+        _state.update { it.copy(deletedOnly = deletedOnly, selection = emptySet()) }
+        refresh()
+    }
+
+    /** Leaves search mode (clears query, deleted filter and selection). */
+    fun closeSearch() {
+        _state.update {
+            it.copy(searchOpen = false, query = "", deletedOnly = false, hits = emptyList(), selection = emptySet())
+        }
+        refresh()
+    }
+
+    fun toggleSelected(messageId: Long) {
+        _state.update { it.copy(selection = it.selection.toggle(messageId)) }
+    }
+
+    fun clearSelection() {
+        _state.update { it.copy(selection = emptySet()) }
+    }
+
+    suspend fun markSelectedRead(read: Boolean) = applyToSelection { ingestor.setRead(it, read) }
+
+    suspend fun pinSelected(pinned: Boolean) = applyToSelection { ingestor.setPinned(it, pinned) }
+
+    suspend fun deleteSelected() = applyToSelection { ingestor.deleteMessages(it) }
+
+    private suspend fun applyToSelection(action: (Set<Long>) -> Unit) {
+        val ids = _state.value.selection
+        if (ids.isEmpty()) return
+        withContext(io) { action(ids) }
+        _state.update { it.copy(selection = emptySet()) }
+        load()
     }
 
     fun refresh() {
@@ -66,6 +129,7 @@ class HomeViewModel(
 data class ConversationState(
     val messages: List<MessageEntity> = emptyList(),
     val loaded: Boolean = false,
+    val selection: Set<Long> = emptySet(),
 )
 
 class ConversationViewModel(
@@ -78,13 +142,40 @@ class ConversationViewModel(
 
     suspend fun load() {
         val messages = withContext(io) { ingestor.messages(conversationId) }
-        _state.value = ConversationState(messages, loaded = true)
+        _state.update {
+            val alive = messages.map { m -> m.id }.toSet()
+            it.copy(messages = messages, loaded = true, selection = it.selection intersect alive)
+        }
     }
 
     fun refresh() {
         viewModelScope.launch { load() }
     }
+
+    fun toggleSelected(messageId: Long) {
+        _state.update { it.copy(selection = it.selection.toggle(messageId)) }
+    }
+
+    fun clearSelection() {
+        _state.update { it.copy(selection = emptySet()) }
+    }
+
+    suspend fun markSelectedRead(read: Boolean) = applyToSelection { ingestor.setRead(it, read) }
+
+    suspend fun pinSelected(pinned: Boolean) = applyToSelection { ingestor.setPinned(it, pinned) }
+
+    suspend fun deleteSelected() = applyToSelection { ingestor.deleteMessages(it) }
+
+    private suspend fun applyToSelection(action: (Set<Long>) -> Unit) {
+        val ids = _state.value.selection
+        if (ids.isEmpty()) return
+        withContext(io) { action(ids) }
+        _state.update { it.copy(selection = emptySet()) }
+        load()
+    }
 }
+
+private fun Set<Long>.toggle(id: Long): Set<Long> = if (id in this) this - id else this + id
 
 data class SettingsState(
     val apps: List<AppEntity> = emptyList(),
