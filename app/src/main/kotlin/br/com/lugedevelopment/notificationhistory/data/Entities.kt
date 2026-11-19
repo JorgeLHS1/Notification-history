@@ -64,7 +64,8 @@ data class MessageEntity(
     val metadata: String? = null,
 )
 
-enum class AttachmentType { LINK, IMAGE, LARGE_ICON, ACTION }
+/** MEDIA_FILE (T10): value = absolute path of a media file copied into app-private storage. */
+enum class AttachmentType { LINK, IMAGE, LARGE_ICON, ACTION, MEDIA_FILE }
 
 /** Metadata tied to a message: link URL, image/large-icon reference, or action label. */
 @Entity(
