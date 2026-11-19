@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onb_access_title">Allow notification access</string>
+    <string name="onb_access_body">To keep a history, the app needs to read notifications as they arrive. Android asks you to turn this on in a system screen: find this app in the list and switch it on.</string>
+    <string name="onb_access_privacy">Everything stays on this device. The app has no internet access and never sends your notifications anywhere.</string>
+    <string name="onb_access_button">Open notification access</string>
+    <string name="onb_restricted_hint">If the switch is greyed out or blocked, open the app info, tap the top-right menu and choose \"Allow restricted settings\", then try again.</string>
+    <string name="onb_app_info_button">Open app info</string>
+    <string name="onb_revoked_title">Notification access was turned off</string>
+    <string name="onb_revoked_body">The app stopped capturing notifications because access was revoked. Turn it on again to resume the history; messages received in the meantime were not saved.</string>
+    <string name="onb_guide_title">Keep capture running</string>
+    <string name="onb_guide_body">Some phones stop background apps to save battery, which makes the app miss notifications. Allow it to run in the background:</string>
+    <string name="onb_battery_button">Ignore battery optimization</string>
+    <string name="onb_xiaomi_title">Xiaomi / Redmi / POCO</string>
+    <string name="onb_xiaomi_body">Turn on Autostart for this app and set its battery saver to \"No restrictions\".</string>
+    <string name="onb_xiaomi_autostart_button">Open Autostart</string>
+    <string name="onb_xiaomi_battery_button">Open battery saver</string>
+    <string name="onb_xiaomi_lock_tip">Tip: open the recent apps screen, long-press this app and choose the lock option so it is not closed.</string>
+    <string name="onb_generic_body">If notifications go missing, look for battery or background-activity settings for this app in your phone settings and remove the restrictions.</string>
+    <string name="onb_finish">Done</string>
+    <string name="onb_open_failed">Could not open that settings screen on this phone. Open the phone settings and find this app manually.</string>
+    <string name="onb_status_title">Capture status</string>
+    <string name="onb_status_access">Notification access</string>
+    <string name="onb_status_connected">Listener connected</string>
+    <string name="onb_status_battery">Battery optimization ignored</string>
+    <string name="onb_status_ok">OK</string>
+    <string name="onb_status_pending">Pending</string>
+    <string name="onb_open_guide">Open setup guide</string>
+</resources>

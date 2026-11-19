@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_action">Search</string>
+    <string name="search_hint">Search messages</string>
+    <string name="search_close">Close</string>
+    <string name="search_prompt">Type to search your history.</string>
+    <string name="search_no_results">No messages found.</string>
+    <string name="filter_deleted_only">Deleted only</string>
+    <string name="selected_count">%d selected</string>
+    <string name="selection_cancel">Cancel</string>
+    <string name="action_mark_read">Mark read</string>
+    <string name="action_mark_unread">Mark unread</string>
+    <string name="action_pin">Pin</string>
+    <string name="action_unpin">Unpin</string>
+    <string name="action_delete">Delete</string>
+    <string name="delete_confirm_title">Delete messages?</string>
+    <string name="delete_confirm_message">%d selected messages will be permanently removed from this device. This cannot be undone.</string>
+    <string name="pinned_badge">Pinned</string>
+    <string name="unread_badge">New</string>
+</resources>
