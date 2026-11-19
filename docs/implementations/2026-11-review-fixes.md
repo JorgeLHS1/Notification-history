@@ -70,3 +70,10 @@
 3. Notificação com foto (BigPicture): anexo de imagem aparece na mensagem.
 4. Recuperar mídia, apagar a mensagem pela seleção: o arquivo some de `files/media` (`adb shell run-as br.com.lugedevelopment.notificationhistory ls files/media`).
 5. Com a lista aberta, chegar notificação: a tela atualiza sem atraso; parada, não há recarga contínua. Exportar backup grande enquanto chegam notificações: captura continua. Girar a tela desbloqueado: não pede biometria.
+
+## Device fix: `formatTime` crash on Android 16
+
+- **Symptom:** opening the app with captured conversations crashed (`NullPointerException ... Context.getUserId()` in `ui/Screens.kt` `formatTime`).
+- **Cause:** `DateUtils.formatDateTime(null, ...)` needs a real `Context` on device; Robolectric tolerated `null`, so unit tests passed.
+- **Fix:** `formatTime` now uses `java.text.DateFormat` (short time today, short date otherwise, device locale). No `Context` needed.
+- **Gotcha for future agents:** never pass `null` as `Context` to framework helpers; Robolectric hides it. Verified on the Xiaomi 2311DRK48G (Android 16).

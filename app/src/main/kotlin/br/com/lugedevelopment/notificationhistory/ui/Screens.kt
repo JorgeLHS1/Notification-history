@@ -75,13 +75,18 @@ import br.com.lugedevelopment.notificationhistory.settings.RetentionSettings
 
 // --- Shared helpers -------------------------------------------------------------------
 
-private fun formatTime(millis: Long, now: Long = System.currentTimeMillis()): String {
-    val flags = if (DateUtils.isToday(millis)) {
-        DateUtils.FORMAT_SHOW_TIME
+/**
+ * Short time for today, short date otherwise, in the device locale.
+ * Uses java.text instead of DateUtils.formatDateTime(null, ...), which crashes on real
+ * devices (it needs a Context; Robolectric tolerated null).
+ */
+internal fun formatTime(millis: Long): String {
+    val style = if (DateUtils.isToday(millis)) {
+        java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
     } else {
-        DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_NUMERIC_DATE or DateUtils.FORMAT_ABBREV_ALL
+        java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT)
     }
-    return DateUtils.formatDateTime(null, millis, flags)
+    return style.format(java.util.Date(millis))
 }
 
 /** App icon from the package manager; falls back to a letter avatar if the icon is unavailable. */
