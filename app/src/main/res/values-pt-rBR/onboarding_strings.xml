@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onb_access_title">Permitir acesso às notificações</string>
+    <string name="onb_access_body">Para guardar o histórico, o app precisa ler as notificações assim que chegam. O Android pede que você ative isso em uma tela do sistema: encontre este app na lista e ligue a chave.</string>
+    <string name="onb_access_privacy">Tudo fica neste aparelho. O app não tem acesso à internet e nunca envia suas notificações para lugar nenhum.</string>
+    <string name="onb_access_button">Abrir acesso às notificações</string>
+    <string name="onb_restricted_hint">Se a chave estiver cinza ou bloqueada, abra as informações do app, toque no menu no canto superior direito e escolha \"Permitir configurações restritas\"; depois tente de novo.</string>
+    <string name="onb_app_info_button">Abrir informações do app</string>
+    <string name="onb_revoked_title">O acesso às notificações foi desativado</string>
+    <string name="onb_revoked_body">O app parou de capturar notificações porque o acesso foi revogado. Ative-o de novo para retomar o histórico; as mensagens recebidas nesse intervalo não foram salvas.</string>
+    <string name="onb_guide_title">Mantenha a captura funcionando</string>
+    <string name="onb_guide_body">Alguns celulares encerram apps em segundo plano para economizar bateria, e o app deixa de receber notificações. Permita que ele rode em segundo plano:</string>
+    <string name="onb_battery_button">Ignorar otimização de bateria</string>
+    <string name="onb_xiaomi_title">Xiaomi / Redmi / POCO</string>
+    <string name="onb_xiaomi_body">Ative a Inicialização automática para este app e defina a economia de bateria como \"Sem restrições\".</string>
+    <string name="onb_xiaomi_autostart_button">Abrir Inicialização automática</string>
+    <string name="onb_xiaomi_battery_button">Abrir economia de bateria</string>
+    <string name="onb_xiaomi_lock_tip">Dica: abra a tela de apps recentes, mantenha o dedo sobre este app e escolha a opção de bloquear para que ele não seja fechado.</string>
+    <string name="onb_generic_body">Se notificações forem perdidas, procure nas configurações do celular as opções de bateria ou atividade em segundo plano deste app e remova as restrições.</string>
+    <string name="onb_finish">Concluir</string>
+    <string name="onb_open_failed">Não foi possível abrir essa tela de configurações neste celular. Abra as configurações do aparelho e procure este app manualmente.</string>
+    <string name="onb_status_title">Status da captura</string>
+    <string name="onb_status_access">Acesso às notificações</string>
+    <string name="onb_status_connected">Listener conectado</string>
+    <string name="onb_status_battery">Otimização de bateria ignorada</string>
+    <string name="onb_status_ok">OK</string>
+    <string name="onb_status_pending">Pendente</string>
+    <string name="onb_open_guide">Abrir guia de configuração</string>
+</resources>
