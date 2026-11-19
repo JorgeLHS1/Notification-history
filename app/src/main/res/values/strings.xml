@@ -3,4 +3,18 @@
     <string name="app_name">Notification History</string>
     <string name="home_title">Notification History</string>
     <string name="home_empty">No notifications captured yet.</string>
+    <string name="filter_all">All</string>
+    <string name="deleted_badge">Deleted</string>
+    <string name="back">Back</string>
+    <string name="conversation_empty">No messages in this conversation.</string>
+    <string name="unknown_sender">Unknown sender</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_capture">Capture by app</string>
+    <string name="settings_apps_empty">No apps seen yet. Apps appear here after their first notification.</string>
+    <string name="settings_retention">Retention</string>
+    <string name="retention_general">Keep notifications for</string>
+    <string name="retention_deleted">Keep deleted messages for</string>
+    <string name="retention_days">%d days</string>
+    <string name="retention_forever">Forever</string>
+    <string name="retention_pinned_note">Pinned messages never expire.</string>
 </resources>
