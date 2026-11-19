@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_action">Buscar</string>
+    <string name="search_hint">Buscar mensagens</string>
+    <string name="search_close">Fechar</string>
+    <string name="search_prompt">Digite para buscar no histórico.</string>
+    <string name="search_no_results">Nenhuma mensagem encontrada.</string>
+    <string name="filter_deleted_only">Só apagadas</string>
+    <string name="selected_count">%d selecionadas</string>
+    <string name="selection_cancel">Cancelar</string>
+    <string name="action_mark_read">Marcar como lida</string>
+    <string name="action_mark_unread">Marcar como não lida</string>
+    <string name="action_pin">Fixar</string>
+    <string name="action_unpin">Desafixar</string>
+    <string name="action_delete">Excluir</string>
+    <string name="delete_confirm_title">Excluir mensagens?</string>
+    <string name="delete_confirm_message">%d mensagens selecionadas serão removidas definitivamente deste aparelho. Não dá para desfazer.</string>
+    <string name="pinned_badge">Fixada</string>
+    <string name="unread_badge">Nova</string>
+</resources>

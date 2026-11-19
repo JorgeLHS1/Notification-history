@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_backup">Backup</string>
+    <string name="backup_note">Export the history to a ZIP file in a folder you choose, or import one back. Imports merge without duplicating messages. The file is not encrypted: keep it somewhere safe.</string>
+    <string name="backup_export">Export</string>
+    <string name="backup_import">Import</string>
+    <string name="backup_working">Working…</string>
+    <string name="backup_export_done">Backup exported.</string>
+    <string name="backup_import_done">Import finished: %1$d new messages, %2$d already present.</string>
+    <string name="backup_invalid">This file is not a backup of this app or comes from a newer version.</string>
+    <string name="backup_failed">The operation failed. Check the file and try again.</string>
+    <string name="settings_media">Received media</string>
+    <string name="media_explanation">Notifications only carry a preview of photos. To keep the actual files, choose a folder where your messenger saves received media (for example a WhatsApp media folder inside Android/media, or a folder you export media to). The app copies files whose time matches a message with a photo. Android may block some app folders in the folder picker; in that case, save the media to an accessible folder and choose that one.</string>
+    <string name="media_no_folder">No folder chosen.</string>
+    <string name="media_folder_set">Folder chosen. New matching files are copied when you scan.</string>
+    <string name="media_pick_folder">Choose folder</string>
+    <string name="media_scan">Scan now</string>
+    <string name="media_scan_done">Scanned %1$d files, copied %2$d.</string>
+</resources>
