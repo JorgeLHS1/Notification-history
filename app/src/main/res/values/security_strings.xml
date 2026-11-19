@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_prompt_title">Unlock Notification History</string>
+    <string name="security_prompt_subtitle">Confirm your identity to view your history</string>
+    <string name="security_locked">Locked</string>
+    <string name="security_unlock">Unlock</string>
+    <string name="security_no_lock">Set up a screen lock or biometric in your device settings to use this app.</string>
+</resources>

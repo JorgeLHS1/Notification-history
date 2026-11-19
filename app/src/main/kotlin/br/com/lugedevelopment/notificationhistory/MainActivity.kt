@@ -1,7 +1,9 @@
 package br.com.lugedevelopment.notificationhistory
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
+import br.com.lugedevelopment.notificationhistory.security.SecureGate
+import br.com.lugedevelopment.notificationhistory.security.applySecureWindow
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,12 +18,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applySecureWindow()
         setContent {
             MaterialTheme {
-                HomeScreen()
+                SecureGate {
+                    HomeScreen()
+                }
             }
         }
     }
