@@ -64,14 +64,30 @@ class Ingestor(
 ) {
     private val dao = database.historyDao()
 
-    fun ingest(snapshot: NotificationSnapshot): IngestResult = database.runInTransaction<IngestResult> {
+    /** Identity of a message inside a notification repost: its own timestamp plus sender. */
+    private data class MessageIdentity(val conversationKey: String, val sender: String?, val postedAt: Long)
+
+    /**
+     * Messages (with their own timestamps) of the last POSTED snapshot per notification key.
+     * In memory only: a process restart resets the baseline, so the first repost after it
+     * cannot reveal a deletion. REMOVED events (read/dismissed) clear the entry.
+     */
+    private val lastSnapshot = HashMap<String, Set<MessageIdentity>>()
+
+    fun ingest(snapshot: NotificationSnapshot): IngestResult = synchronized(lastSnapshot) { ingestLocked(snapshot) }
+
+    private fun ingestLocked(snapshot: NotificationSnapshot): IngestResult = database.runInTransaction<IngestResult> {
         val app = dao.app(snapshot.packageName)
             ?: AppEntity(snapshot.packageName, snapshot.appLabel).also { dao.insertApp(it) }
         if (!app.captureEnabled) return@runInTransaction IngestResult.Skipped
-        if (snapshot.event == NotificationSnapshot.Event.REMOVED) return@runInTransaction IngestResult.Ignored
+        if (snapshot.event == NotificationSnapshot.Event.REMOVED) {
+            lastSnapshot.remove(snapshot.key)
+            return@runInTransaction IngestResult.Ignored
+        }
 
         val parsed = parsers.parserFor(snapshot.packageName).parse(snapshot)
         if (parsed.isEmpty()) return@runInTransaction IngestResult.Ignored
+        val removedFromRepost = removedFromRepost(snapshot.key, parsed)
 
         val metadata = snapshot.extras.takeIf { it.isNotEmpty() }
             ?.entries?.joinToString("\n") { "${it.key}=${it.value}" }
@@ -132,6 +148,12 @@ class Ingestor(
             dao.updateConversation(conversation)
             stored++
         }
+        for (gone in removedFromRepost) {
+            val conversation = dao.conversation(snapshot.packageName, gone.conversationKey) ?: continue
+            val original = dao.deletionCandidateAt(conversation.id, gone.sender, gone.postedAt) ?: continue
+            dao.markDeleted(original.id, snapshot.postedAt)
+            markedDeleted++
+        }
         // Image/large-icon/action metadata belongs to the notification: attach it to the newest new message.
         lastStoredId?.let { id ->
             val extra = AttachmentBuilder.fromExtras(snapshot.extras)
@@ -146,6 +168,29 @@ class Ingestor(
      * key (plain posts re-posted with a new time). Chat apps reuse one key per conversation,
      * so several candidates mean "unknown" and nothing is marked.
      */
+    /**
+     * Messages that vanished from a repost of the same notification key (sender deleted them
+     * for everyone without a placeholder). removed = previous - current, added = current - previous.
+     * Removed messages count as deleted when nothing was added, or when they are newer than a
+     * message still present (not the oldest pushed out by a size cap). When something was added
+     * and only the oldest messages left, it is truncation and nothing is marked.
+     * Only messages with their own timestamps (MessagingStyle) take part.
+     */
+    private fun removedFromRepost(key: String, parsed: List<ParsedMessage>): Set<MessageIdentity> {
+        val current = parsed.filter { it.hasOwnTimestamp }
+            .map { MessageIdentity(it.conversationKey, it.sender, it.postedAt) }.toSet()
+        if (current.isEmpty()) {
+            lastSnapshot.remove(key)
+            return emptySet()
+        }
+        val previous = lastSnapshot.put(key, current) ?: return emptySet()
+        val removed = previous - current
+        if (removed.isEmpty()) return emptySet()
+        if ((current - previous).isEmpty()) return removed
+        val oldestKept = (previous intersect current).minOfOrNull { it.postedAt } ?: return emptySet()
+        return removed.filter { it.postedAt > oldestKept }.toSet()
+    }
+
     private fun deletionTarget(conversationId: Long, message: ParsedMessage, key: String): MessageEntity? =
         dao.deletionCandidateAt(conversationId, message.sender, message.postedAt)
             ?: dao.deletionCandidatesByKey(conversationId, message.sender, key).singleOrNull()

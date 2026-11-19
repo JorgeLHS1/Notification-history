@@ -14,6 +14,7 @@ Todas as mudanças relevantes deste projeto são registradas aqui, seguindo [Sem
 - **Added**: Backup export/import as a versioned ZIP via the Storage Access Framework, and media recovery from a user-picked folder into app-private storage (copies are not encrypted).
 - **Added**: Notification-access onboarding, Xiaomi (MIUI/HyperOS) autostart/battery guide and capture status card; biometric/device-credential lock, hidden recents preview and blocked screenshots; UI in English and Portuguese (BR).
 - **Fixed**: Repeated identical messages in one chat are no longer dropped as duplicates; a "deleted" placeholder no longer flags the wrong message or leaves an empty conversation; image URIs from notifications are kept; copied media is removed with its message.
+- **Fixed**: Messages deleted for everyone are now detected when the chat app simply drops them from the reposted notification (no "deleted" placeholder); the text is kept and flagged as deleted, while reading/dismissing the notification and old messages pushed out by the size cap are not.
 - **Changed**: Screens refresh on database changes instead of polling, with a single query for last messages; backup and media jobs no longer delay capture; the app lock survives screen rotation; app labels are cached in the listener.
 
 ### 🇧🇷 Português
@@ -26,6 +27,7 @@ Todas as mudanças relevantes deste projeto são registradas aqui, seguindo [Sem
 - **Adicionado**: Exportação/importação de backup em ZIP versionado pelo Storage Access Framework e recuperação de mídia de uma pasta escolhida pelo usuário para o armazenamento privado do app (cópias sem criptografia).
 - **Adicionado**: Onboarding de acesso às notificações, guia de inicialização automática/bateria da Xiaomi (MIUI/HyperOS) e cartão de status da captura; bloqueio por biometria/credencial, prévia oculta em recentes e capturas de tela bloqueadas; interface em português (BR) e inglês.
 - **Corrigido**: Mensagens idênticas repetidas na mesma conversa não são mais descartadas como duplicadas; o placeholder de "apagada" não marca mais a mensagem errada nem deixa conversa vazia; URIs de imagem das notificações são preservadas; mídia copiada é removida junto com a mensagem.
+- **Corrigido**: Mensagens apagadas para todos agora são detectadas quando o app de chat apenas as remove da notificação republicada (sem placeholder de "apagada"); o texto é preservado e marcado como apagado, sem marcar leitura/dispensa da notificação nem mensagens antigas empurradas pelo limite de tamanho.
 - **Alterado**: Telas atualizam com mudanças no banco em vez de polling, com uma única consulta para as últimas mensagens; backup e mídia não atrasam mais a captura; o bloqueio do app sobrevive à rotação da tela; rótulos de apps ficam em cache no listener.
 
 ## [0.0.0] - 2026-11-19

@@ -52,3 +52,15 @@
 2. Remetente apaga a mensagem (PT e EN): item fica marcado como apagado com o texto original.
 3. Dispensar a notificação: nada é marcado como apagado.
 4. Borda: placeholder de mensagem nunca capturada não aparece no histórico.
+
+## 6. Apagadas por remoção do repost (sem placeholder), v0.4.0
+
+Continuação das [correções da revisão](2026-11-review-fixes.md). Evidência em aparelho real (Xiaomi, Android 16, versão atual do mensageiro): ao apagar "para todos", o app **não** posta placeholder; ele republica a notificação (mesma chave) sem a mensagem. Ex.: `[A]` → `[A, B]` → `[B]`. Abrir/ler a conversa gera REMOVED, que não é apagamento.
+
+- `Ingestor.lastSnapshot`: mapa em memória `notificationKey → Set<MessageIdentity(conversationKey, sender, postedAt)>` do último POSTED, só com mensagens de timestamp próprio (`hasOwnTimestamp`, MessagingStyle). Acesso serializado (`synchronized`).
+- Novo POSTED da mesma chave: `R = anterior − atual`, `A = atual − anterior`. Marca `R` como apagadas (texto mantido, `deletedAt = snapshot.postedAt`, via `deletionCandidateAt`) se `A` estiver vazio; com `A` não vazio, marca só as de `R` mais novas que alguma mensagem ainda presente. Se `R` são apenas as mais antigas e há novas, é truncamento pelo limite de tamanho: nada é marcado.
+- REMOVED continua sem marcar nada, mas limpa a baseline da chave (o repost seguinte é tratado como primeiro).
+- Placeholder segue funcionando: ele tem o mesmo remetente/horário da original, então a identidade não some do conjunto.
+- **Gotcha**: sem mudança de schema (já há instalação no aparelho); reiniciar o processo zera a baseline, então um apagamento no primeiro repost após o restart não é detectado.
+- Fixtures antigas que republicavam só o placeholder (sumindo com as demais) foram ajustadas para reposts realistas.
+- Testes (em `DeletedRetentionTest`): sequência do aparelho, truncamento, REMOVED + repost e placeholder com rastreio ativo.

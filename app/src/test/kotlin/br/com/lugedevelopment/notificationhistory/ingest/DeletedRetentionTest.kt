@@ -117,7 +117,9 @@ class DeletedRetentionTest {
         ingestor.ingest(
             group(listOf(SnapshotMessage("Member 1", "from one", 1_000), SnapshotMessage("Member 2", "from two", 1_000))),
         )
-        ingestor.ingest(group(listOf(SnapshotMessage("Member 2", "Mensagem apagada", 1_000))))
+        ingestor.ingest(
+            group(listOf(SnapshotMessage("Member 1", "from one", 1_000), SnapshotMessage("Member 2", "Mensagem apagada", 1_000))),
+        )
 
         val bySender = onlyConversationMessages().associateBy { it.sender }
         assertFalse(bySender.getValue("Member 1").deleted)
@@ -162,7 +164,17 @@ class DeletedRetentionTest {
         )
         val byText = onlyConversationMessages().associateBy { it.text }
         ingestor.setPinned(byText.getValue("old pinned").id, true)
-        ingestor.ingest(direct(listOf(SnapshotMessage(null, "This message was deleted", now - 100 * day + 2))))
+        // Realistic repost: the other messages stay, only the deleted one becomes a placeholder.
+        ingestor.ingest(
+            direct(
+                listOf(
+                    SnapshotMessage(null, "old", now - 100 * day),
+                    SnapshotMessage(null, "old pinned", now - 100 * day + 1),
+                    SnapshotMessage(null, "This message was deleted", now - 100 * day + 2),
+                    SnapshotMessage(null, "recent", now - 10 * day),
+                ),
+            ).copy(postedAt = now - 100 * day + 2),
+        )
 
         val result = ingestor.applyRetention(RetentionPolicy(generalDays = 90, deletedDays = 365), now)
 
@@ -186,5 +198,56 @@ class DeletedRetentionTest {
         assertEquals(RetentionResult(1, 0, 1), ingestor.applyRetention(RetentionPolicy(), now))
         assertTrue(ingestor.conversations().isEmpty())
         assertNull(ingestor.apps().firstOrNull { !it.captureEnabled })
+    }
+
+    // --- Deleted detected by removal from a repost (no placeholder) ---
+
+    private val msgA = SnapshotMessage("Contact A", "Teste A", 1_795_115_082_000)
+    private val msgB = SnapshotMessage("Contact A", "Teste B", 1_795_115_112_000)
+
+    @Test
+    fun messageVanishingFromRepostIsMarkedDeletedWithTextKept() {
+        ingestor.ingest(direct(listOf(msgA)).copy(postedAt = 1_795_115_084_000))
+        ingestor.ingest(direct(listOf(msgA, msgB)).copy(postedAt = 1_795_115_114_000))
+        val result = ingestor.ingest(direct(listOf(msgB)).copy(postedAt = 1_795_115_130_000))
+
+        assertEquals(1, (result as IngestResult.Stored).markedDeleted)
+        val (a, b) = onlyConversationMessages()
+        assertEquals("Teste A", a.text)
+        assertTrue(a.deleted)
+        assertEquals(1_795_115_130_000L, a.deletedAt)
+        assertFalse(b.deleted)
+    }
+
+    @Test
+    fun oldestPushedOutByCapWhileNewArrivesIsTruncationNotDeletion() {
+        val c = SnapshotMessage("Contact A", "Teste C", 1_795_115_140_000)
+        ingestor.ingest(direct(listOf(msgA, msgB)))
+        ingestor.ingest(direct(listOf(msgB, c)))
+
+        assertTrue(onlyConversationMessages().none { it.deleted })
+        assertEquals(3, onlyConversationMessages().size)
+    }
+
+    @Test
+    fun removedEventThenRepostMarksNothing() {
+        ingestor.ingest(direct(listOf(msgA, msgB)))
+        ingestor.ingest(direct(listOf(msgA, msgB)).copy(event = NotificationSnapshot.Event.REMOVED))
+        ingestor.ingest(direct(listOf(msgB)))
+
+        assertTrue(onlyConversationMessages().none { it.deleted })
+    }
+
+    @Test
+    fun placeholderStillMarksOriginalWithRemovalTracking() {
+        ingestor.ingest(direct(listOf(msgA, msgB)))
+        val placeholder = msgA.copy(text = "This message was deleted")
+        val result = ingestor.ingest(direct(listOf(placeholder, msgB)))
+
+        assertEquals(1, (result as IngestResult.Stored).markedDeleted)
+        val (a, b) = onlyConversationMessages()
+        assertTrue(a.deleted)
+        assertEquals("Teste A", a.text)
+        assertFalse(b.deleted)
     }
 }
