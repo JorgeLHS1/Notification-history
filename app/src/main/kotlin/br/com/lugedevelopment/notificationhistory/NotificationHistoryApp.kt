@@ -1,7 +1,7 @@
-package br.com.lugedevelopment.notificationhistory
+﻿package br.com.lugedevelopment.notificationhistory
 
 import android.app.Application
-import br.com.lugedevelopment.notificationhistory.data.HistoryDatabase
+import br.com.lugedevelopment.notificationhistory.security.EncryptedDatabase
 import br.com.lugedevelopment.notificationhistory.ingest.Ingestor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -14,7 +14,7 @@ import java.util.concurrent.Executors
  */
 class NotificationHistoryApp : Application() {
     /** Lazy so a cold start does not open the database until something needs it. */
-    val ingestor: Ingestor by lazy { Ingestor(HistoryDatabase.build(this)) }
+    val ingestor: Ingestor by lazy { Ingestor(EncryptedDatabase.build(this)) }
 
     /** Single background thread: serialises writes in arrival order. */
     val ioExecutor: ExecutorService by lazy { Executors.newSingleThreadExecutor() }
